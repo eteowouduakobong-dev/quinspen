@@ -1,9 +1,11 @@
+import React, { Suspense } from "react";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { PurposeProvider } from "@/context/PurposeContext";
+import { QuinspenProvider } from "@/context/QuinspenContext";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
+import { AuthModal } from "@/components/AuthModal";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,9 +18,18 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Purpose Clinic • Discover & Track Your Life's Purpose",
+  title: "QUINSPEN • Anonymous Storytelling Sanctuary",
   description:
-    "A welcoming, step-by-step sanctuary helping confused individuals uncover their authentic life purpose, core values, Ikigai, and daily alignment.",
+    "Share your raw, authentic stories anonymously without exposing your identity. Connect with other souls, exchange whispers, and maintain your personal chronicle in complete privacy.",
+  keywords: [
+    "anonymous storytelling",
+    "quinspen",
+    "confessions",
+    "creative writing",
+    "empathy",
+    "private journal",
+    "whispers",
+  ],
 };
 
 export default function RootLayout({
@@ -29,14 +40,17 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
     >
-      <body className="min-h-full flex flex-col bg-stone-50 text-stone-900 dark:bg-stone-950 dark:text-stone-100">
-        <PurposeProvider>
-          <Navbar />
-          <div className="flex-1 flex flex-col">{children}</div>
+      <body className="min-h-full flex flex-col bg-stone-950 text-stone-100 selection:bg-amber-500/30 selection:text-amber-200">
+        <QuinspenProvider>
+          <Suspense fallback={<div className="h-16 bg-stone-950 border-b border-stone-800" />}>
+            <Navbar />
+          </Suspense>
+          <main className="flex-1 flex flex-col">{children}</main>
           <Footer />
-        </PurposeProvider>
+          <AuthModal />
+        </QuinspenProvider>
       </body>
     </html>
   );

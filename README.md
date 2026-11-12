@@ -1,86 +1,96 @@
-# 🌿 Purpose Clinic
+# QUINSPEN — Anonymous Storytelling Platform
 
-> A compassionate, step-by-step sanctuary designed to help individuals who feel confused or overwhelmed about what their life is all about to systematically unpack their experiences, excavate their core values, synthesize their Ikigai, and track daily purpose alignment.
+> **"The Quill of Untold Stories. Real Human Emotion. Zero Identity Exposure."**
 
----
-
-## ✨ Features & Discovery Journey
-
-### 🧭 The 6-Stage Clinic Path
-1. **Stage 1: The Life Audit (Unpacking)**
-   - 8-dimension life audit (Career, Health, Relationships, Growth, Creativity, Finances, Environment, Inner Calm).
-   - Rating sliders (1–10) with live balance diagnosis and energy leak identification.
-2. **Stage 2: Core Values Excavation (The North Star)**
-   - 48 curated core human values across 6 domains (Wisdom, Heart, Courage, Impact, Joy, Integrity).
-   - Selection and rank-ordering of top 5 non-negotiables with custom personal definitions and action tests.
-3. **Stage 3: Superpowers & Flow States (The Ignition)**
-   - Natural gifts audit, effortless flow triggers, childhood curiosity revival (ages 7–12), and energy givers vs. drainers.
-4. **Stage 4: The Ikigai Matrix (The Sweet Spot)**
-   - Japanese framework integrating:
-     - What you **Love** (Passion)
-     - What you are **Good At** (Vocation)
-     - What the **World Needs** (Mission)
-     - What you can get **Paid For** (Profession)
-5. **Stage 5: The Purpose Manifesto (The Sacred Calling)**
-   - Guided sentence builder creating a North Star headline, target audience, transformation, and daily declaration.
-   - Generates a verified, downloadable, and printable Purpose Card with confetti celebration.
-6. **Stage 6: Action Blueprint & Habit Anchors (The Walk)**
-   - 30-Day quick wins, 90-Day momentum milestones, and 1-Year North Star commitments.
+**QUINSPEN** is a modern, interactive storytelling sanctuary where individuals can sign up to safely record their journeys and share their deepest, rawest stories with complete anonymity. Readers and writers can connect 1-on-1 through masked **Whispers** without ever revealing their names, emails, or personal identities.
 
 ---
 
-### 📈 Daily Purpose & Life Tracker
-- Morning intention setting ("What 1 action will honor my purpose today?").
-- Evening clarity reflection & gratitude entry.
-- Alignment score (1–10), energy level, and mood monitoring.
-- Historical progress log to witness clarity growth over time.
+## 🌟 Key Features
 
-### 🛡️ Emergency Clarity Sanctuary (SOS Kit)
-- Instant modal for existential overwhelm.
-- 4-4-4-4 box breathing visual guide.
-- 3 Grounding Anchors for uncertainty.
-- Brain Dump canvas to quickly reduce mental friction.
+### 1. 🛡️ 100% Identity Shield & Pen Identities
+- **Anonymous Pen Names**: Every account is granted an evocative anonymous persona (e.g., *Midnight Scribe*, *Florentine Ghost*, *Raindrop Scribe*) with a randomizer button.
+- **Strict Privacy Guarantee**: Real emails and identity markers are strictly guarded for account record-keeping only and are never exposed in public queries, feeds, or messages.
+- **Total Ghost Mode**: Writers can detach even their account pen name for specific posts, publishing under a transient alias (e.g. *Nameless Scribe*).
+
+### 2. 🌌 Thematic Story Circles
+Seven dedicated circles designed to give voice to specific frequencies of silence:
+- **Midnight Confessions**: Unspoken truths that only surface late at night.
+- **Unspoken Love**: Words swallowed before they could bridge the distance.
+- **Healing & Grief**: The quiet art of mending broken pieces.
+- **Career & Escape**: Walking away from burnout and golden cages.
+- **Secret Dreams**: The lives we secretly construct in our notebooks.
+- **Family Ties**: Blood, silence, and invisible generational threads.
+- **Late Night Musings**: Epiphanies and poetic fragments at 3 AM.
+
+### 3. 🕯️ Emotional Resonances (Interactive Reactions)
+Replaces shallow social media likes with heartfelt human resonance:
+- 🕯️ **Felt This** (Deep empathy & understanding)
+- 🫂 **Virtual Hug** (Warm comfort & support)
+- 💫 **Inspired** (Hope & perspective)
+- 🌊 **Cathartic** (Tears and emotional release)
+- 🖋️ **Poetic** (Admiration of craft)
+
+### 4. 💬 Masked Peer Whispers (Anonymous 1-on-1 Connection)
+Connects users together safely:
+- Readers moved by a story can transmit an **Anonymous Whisper** to the author.
+- The author can accept or decline the connection request.
+- Once accepted, both parties engage in a real-time-friendly, encrypted-feel **1-on-1 dialogue** under their masked pen names.
+
+### 5. 📜 My Chronicle & Lifetime Records
+Maintains a full, organized record of each user's contributions:
+- **Penned Stories**: Total views, resonance counts, reflection counters, and management tools.
+- **Saved Stories / Bookmarks**: Preserves stories that touched the user.
+- **My Resonances**: History of all reactions left across the sanctuary.
+- **Pen Mask Customizer**: Custom pen name, bio editor, and security audit report.
+
+### 6. 🎧 Web Audio Ambience Synthesizer
+Built-in procedural soundscapes (Gentle Rain, Midnight Fireplace, Night Wind) generated with the Web Audio API without requiring bulky external audio downloads.
 
 ---
 
-## 🛠️ Technology Stack
+## 🛠️ Tech Stack
 
-- **Framework**: [Next.js](https://nextjs.org/) (App Router, React 19, TypeScript)
-- **Database & Auth**: [Supabase](https://supabase.com/) (PostgreSQL & Auth)
-- **ORM**: [Prisma](https://www.prisma.io/) (Data modeling, type safety, migrations)
-- **Styling**: [Tailwind CSS](https://tailwindcss.com/) & Lucide Icons
-- **Deployment**: [Vercel](https://vercel.com/) ready with optimized build scripts
+- **Framework**: [Next.js](https://nextjs.org/) (App Router, React 19, Server & Client Components)
+- **Database & Auth**: [Supabase](https://supabase.com/) (PostgreSQL & Secure Auth)
+- **ORM**: [Prisma](https://www.prisma.io/) (Type-safe client & schema)
+- **Styling**: [Tailwind CSS v4](https://tailwindcss.com/)
+- **Icons**: [Lucide React](https://lucide.dev/)
+- **Deployment**: [Vercel](https://vercel.com/) (Configured in `vercel.json` with automated Prisma generation)
 
 ---
 
 ## 🚀 Getting Started
 
-### 1. Clone & Install
+### 1. Clone & Install Dependencies
 ```bash
-git clone https://github.com/eteowouduakobong-dev/Purpose-Clinic.git
-cd Purpose-Clinic
+git clone <repo-url>
+cd gitclass
 npm install
 ```
 
 ### 2. Configure Environment Variables
-Copy the `.env.example` file to `.env.local`:
+Copy `.env.example` to `.env`:
 ```bash
-cp .env.example .env.local
+cp .env.example .env
 ```
-
-Fill in your Supabase credentials:
+Populate the Supabase and Prisma connection strings:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 DATABASE_URL="postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres?pgbouncer=true"
 DIRECT_URL="postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres"
 ```
 
-### 3. Generate Prisma Client & Migrate
+*(Note: The app is equipped with an intelligent fallback engine, allowing full interactive testing in local demo mode even before database credentials are populated!)*
+
+### 3. Generate Prisma Client & Push Schema
 ```bash
 npx prisma generate
 npx prisma db push
 ```
+
+Alternatively, run the SQL script in `supabase/schema.sql` inside the Supabase SQL Editor.
 
 ### 4. Run Development Server
 ```bash
@@ -90,18 +100,17 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
-## ☁️ Deploying to Vercel
+## 🚢 Deploying to Vercel
 
-1. Push your repository to GitHub (`git push -u origin main`).
-2. Import the project in your [Vercel Dashboard](https://vercel.com/dashboard).
-3. Under **Environment Variables**, add:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `DATABASE_URL`
-   - `DIRECT_URL`
-4. Deploy! Vercel will automatically run `prisma generate && next build`.
+1. Push your code to GitHub.
+2. Import the repository into your [Vercel Dashboard](https://vercel.com/).
+3. Add the environment variables from your `.env` file into Vercel Settings -> Environment Variables.
+4. Click **Deploy**. Vercel will automatically run `prisma generate && next build` as defined in `vercel.json`.
 
 ---
 
-## 📄 License
-MIT License. Crafted with empathy for anyone searching for their reason for being.
+## 🔒 Anonymity & Security
+
+- User email addresses are kept private for authentication and personal chronicle access only.
+- All public storytelling feeds, comments, and 1-on-1 whispers operate strictly via anonymized Pen Names (`penName` & `penTag`).
+- No personally identifiable information (PII) is exposed through public API endpoints.

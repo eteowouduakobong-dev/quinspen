@@ -9,150 +9,131 @@ datasource db {
 }
 
 model User {
-  id              String            @id @default(uuid())
-  email           String            @unique
-  name            String?
-  avatarUrl       String?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  id               String              @id @default(uuid())
+  email            String              @unique
+  penName          String              // e.g. "Velvet Wanderer"
+  penTag           String              @unique // e.g. "scribe_942"
+  avatarIcon       String              @default("feather") // feather, moon, star, flame, compass, book, mask, sparkle
+  avatarColor      String              @default("amber") // amber, indigo, emerald, rose, violet, cyan
+  bio              String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
 
-  purposeProfile  PurposeProfile?
-  lifeAudits      LifeAudit[]
-  coreValues      CoreValue[]
-  superpowers     SuperpowerMap?
-  ikigaiEntry     IkigaiEntry?
-  manifesto       PurposeManifesto?
-  milestones      ActionMilestone[]
-  dailyCheckIns   DailyCheckIn[]
+  stories          Story[]
+  reactions        Reaction[]
+  comments         Comment[]
+  bookmarks        Bookmark[]
+  sentWhispers     WhisperConnection[] @relation("SentWhispers")
+  receivedWhispers WhisperConnection[] @relation("ReceivedWhispers")
+  messages         WhisperMessage[]
 }
 
-model PurposeProfile {
-  id               String   @id @default(uuid())
-  userId           String   @unique
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  currentStage     Int      @default(1) // 1: Audit, 2: Values, 3: Passions, 4: Ikigai, 5: Manifesto, 6: Action
-  stagesCompleted  Int[]    @default([])
-  initialClarity   Int      @default(3) // 1-10
-  currentClarity   Int      @default(3) // 1-10
-  purposeStatement String?
-  lifeTheme        String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+model Story {
+  id              String       @id @default(uuid())
+  slug            String       @unique
+  title           String
+  excerpt         String
+  content         String       @db.Text
+  mood            String       @default("Vulnerable") // Vulnerable, Nostalgic, Confessional, Hopeful, Cathartic, Poetic, Bittersweet
+  circleCategory  String       @default("midnight-confessions") // midnight-confessions, unspoken-love, healing-grief, career-burnout, secret-dreams, family-ties, late-musings
+  tags            String[]     @default([])
+  coverTheme      String       @default("twilight-ink") // twilight-ink, parchment-gold, crimson-velvet, emerald-solitude, amethyst-haze
+  readTimeMinutes Int          @default(3)
+  isDraft         Boolean      @default(false)
+  isGhostMode     Boolean      @default(false) // If true, shows "Nameless Scribe" instead of user's penName
+  ghostAlias      String?
+  viewCount       Int          @default(0)
+
+  authorId        String
+  author          User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  reactions       Reaction[]
+  comments        Comment[]
+  bookmarks       Bookmark[]
+  whispers        WhisperConnection[]
+
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([authorId])
+  @@index([circleCategory])
+  @@index([mood])
 }
 
-model LifeAudit {
+model Reaction {
+  id        String   @id @default(uuid())
+  storyId   String
+  story     Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // FELT_THIS, VIRTUAL_HUG, INSPIRED, CATHARTIC, POETIC
+  createdAt DateTime @default(now())
+
+  @@unique([storyId, userId, type])
+  @@index([storyId])
+  @@index([userId])
+}
+
+model Comment {
   id               String   @id @default(uuid())
+  storyId          String
+  story            Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
   userId           String
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  careerScore      Int      @default(5) // 1-10
-  healthScore      Int      @default(5)
-  relationshipScore Int     @default(5)
-  growthScore      Int      @default(5)
-  creativityScore  Int      @default(5)
-  financeScore     Int      @default(5)
-  environmentScore Int      @default(5)
-  spiritualScore   Int      @default(5)
-  topFriction      String?
-  energyLeaks      String?
-  topPriority      String?
-  auditNotes       String?
+  content          String   @db.Text
+  penNameSnapshot  String   // Pen name at the time of comment
+  avatarIcon       String   @default("feather")
+  avatarColor      String   @default("amber")
+  isAuthor         Boolean  @default(false)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
+  @@index([storyId])
   @@index([userId])
 }
 
-model CoreValue {
-  id                 String   @id @default(uuid())
-  userId             String
-  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  valueName          String
-  rank               Int      @default(1)
-  personalDefinition String?
-  actionExample      String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+model Bookmark {
+  id        String   @id @default(uuid())
+  storyId   String
+  story     Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
 
+  @@unique([storyId, userId])
   @@index([userId])
 }
 
-model SuperpowerMap {
-  id              String   @id @default(uuid())
-  userId          String   @unique
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  naturalTalents  String[] @default([])
-  flowActivities  String[] @default([])
-  childhoodPassions String[] @default([])
-  energyGivers    String[] @default([])
-  energyDrainers  String[] @default([])
-  proudestMoments String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+model WhisperConnection {
+  id           String           @id @default(uuid())
+  storyId      String?
+  story        Story?           @relation(fields: [storyId], references: [id], onDelete: SetNull)
+  initiatorId  String
+  initiator    User             @relation("SentWhispers", fields: [initiatorId], references: [id], onDelete: Cascade)
+  recipientId  String
+  recipient    User             @relation("ReceivedWhispers", fields: [recipientId], references: [id], onDelete: Cascade)
+  status       String           @default("PENDING") // PENDING, ACCEPTED, DECLINED
+  initialNote  String           @db.Text
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  messages     WhisperMessage[]
+
+  @@index([initiatorId])
+  @@index([recipientId])
+  @@index([storyId])
 }
 
-model IkigaiEntry {
-  id              String   @id @default(uuid())
-  userId          String   @unique
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  whatYouLove     String[] @default([]) // Passion & Mission
-  whatYouAreGoodAt String[] @default([]) // Passion & Profession
-  whatWorldNeeds  String[] @default([]) // Mission & Vocation
-  whatYouCanGetPaidFor String[] @default([]) // Profession & Vocation
-  passionTheme    String?
-  missionTheme    String?
-  professionTheme String?
-  vocationTheme   String?
-  ikigaiSynthesis String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-}
+model WhisperMessage {
+  id           String            @id @default(uuid())
+  connectionId String
+  connection   WhisperConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  senderId     String
+  sender       User              @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  content      String            @db.Text
+  isRead       Boolean           @default(false)
+  createdAt    DateTime          @default(now())
 
-model PurposeManifesto {
-  id                String   @id @default(uuid())
-  userId            String   @unique
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  headline          String   // e.g. "To illuminate human potential through storytelling"
-  fullStatement     String
-  whoIServe         String
-  whatITransform    String
-  guidingPrinciples String[] @default([])
-  dailyDeclaration  String?
-  isPublic          Boolean  @default(false)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-}
-
-model ActionMilestone {
-  id              String   @id @default(uuid())
-  userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title           String
-  timeframe       String   // "30_DAYS", "90_DAYS", "1_YEAR"
-  status          String   @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED
-  alignmentReason String?
-  dueDate         DateTime?
-  completedAt     DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  @@index([userId])
-}
-
-model DailyCheckIn {
-  id                String   @id @default(uuid())
-  userId            String
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  date              String   // YYYY-MM-DD
-  morningIntention  String?
-  eveningReflection String?
-  alignmentScore    Int      @default(5) // 1-10
-  energyLevel       Int      @default(5) // 1-10
-  clarityScore      Int      @default(5) // 1-10
-  gratitude         String?
-  mood              String?  // peaceful, inspired, uncertain, restless, grounded
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  @@unique([userId, date])
-  @@index([userId])
+  @@index([connectionId])
+  @@index([senderId])
 }
