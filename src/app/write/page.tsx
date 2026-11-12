@@ -23,7 +23,7 @@ import { CircleSlug, MoodType } from "@/types/quinspen";
 
 export default function WriteStoryPage() {
   const router = useRouter();
-  const { currentUser, publishStory, setIsAuthModalOpen } = useQuinspen();
+  const { currentUser, publishStory, openAuthModal } = useQuinspen();
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -58,7 +58,7 @@ export default function WriteStoryPage() {
     }
   };
 
-  const handlePublish = (e: React.FormEvent) => {
+  const handlePublish = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !content.trim()) return;
 
@@ -72,25 +72,57 @@ export default function WriteStoryPage() {
     const excerpt =
       content.length > 180 ? content.slice(0, 180).trim() + "..." : content.trim();
 
-    const created = publishStory({
-      title: title.trim(),
-      excerpt,
-      content: content.trim(),
-      circleCategory: circle,
-      mood,
-      tags,
-      coverTheme,
-      readTimeMinutes,
-      isDraft: false,
-      isGhostMode,
-      ghostAlias: isGhostMode ? ghostAlias.trim() || "Nameless Scribe" : undefined,
-    });
+    try {
+      const created = await publishStory({
+        title: title.trim(),
+        excerpt,
+        content: content.trim(),
+        circleCategory: circle,
+        mood,
+        tags,
+        coverTheme,
+        readTimeMinutes,
+        isDraft: false,
+        isGhostMode,
+        ghostAlias: isGhostMode ? ghostAlias.trim() || "Nameless Scribe" : undefined,
+      });
 
-    setTimeout(() => {
       setIsPublishing(false);
       router.push(`/story/${created.slug}`);
-    }, 600);
+    } catch {
+      setIsPublishing(false);
+    }
   };
+
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-stone-950 text-stone-100 flex items-center justify-center p-4">
+        <div className="max-w-md w-full text-center p-8 rounded-3xl bg-stone-900 border border-stone-800 shadow-2xl">
+          <Feather className="w-12 h-12 text-amber-400 mx-auto mb-4" />
+          <h2 className="font-serif text-2xl font-bold text-stone-100 mb-2">
+            Sign In to Story Studio
+          </h2>
+          <p className="text-xs text-stone-400 mb-6 leading-relaxed">
+            To publish anonymous stories and maintain records of your work in Supabase, please create an account or sign in with your email.
+          </p>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              onClick={() => openAuthModal("signup")}
+              className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-amber-500 text-stone-950 font-bold text-xs hover:bg-amber-400 transition-colors shadow-lg shadow-amber-500/20"
+            >
+              Sign Up (New User)
+            </button>
+            <button
+              onClick={() => openAuthModal("signin")}
+              className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-stone-800 text-stone-200 font-semibold text-xs hover:bg-stone-700 transition-colors"
+            >
+              Sign In (Existing)
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-stone-950 text-stone-100 py-10">

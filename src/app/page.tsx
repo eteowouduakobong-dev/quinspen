@@ -14,6 +14,8 @@ import {
   Flame,
   Clock,
   HeartHandshake,
+  LogIn,
+  UserCheck,
 } from "lucide-react";
 import { useQuinspen } from "@/context/QuinspenContext";
 import { StoryCard } from "@/components/StoryCard";
@@ -31,7 +33,7 @@ export default function HomePage() {
     searchQuery,
     setSearchQuery,
     currentUser,
-    setIsAuthModalOpen,
+    openAuthModal,
   } = useQuinspen();
 
   const [activeStoryForWhisper, setActiveStoryForWhisper] = useState<StoryItem | null>(null);
@@ -133,13 +135,31 @@ export default function HomePage() {
               <span>Browse 7 Story Circles</span>
             </Link>
 
-            {!currentUser && (
-              <button
-                onClick={() => setIsAuthModalOpen(true)}
-                className="w-full sm:w-auto inline-flex items-center justify-center space-x-1.5 px-5 py-3.5 rounded-xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20 text-sm font-medium transition-all"
+            {!currentUser ? (
+              <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full sm:w-auto">
+                <button
+                  onClick={() => openAuthModal("signup")}
+                  className="w-full sm:w-auto inline-flex items-center justify-center space-x-2 px-6 py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-sm transition-all shadow-lg shadow-amber-500/20"
+                >
+                  <UserCheck className="w-4 h-4" />
+                  <span>Create Account (Sign Up)</span>
+                </button>
+                <button
+                  onClick={() => openAuthModal("signin")}
+                  className="w-full sm:w-auto inline-flex items-center justify-center space-x-2 px-6 py-3.5 rounded-xl bg-stone-900 border border-stone-800 hover:border-amber-500/40 text-stone-200 font-semibold text-sm transition-all"
+                >
+                  <LogIn className="w-4 h-4 text-stone-400" />
+                  <span>Sign In</span>
+                </button>
+              </div>
+            ) : (
+              <Link
+                href="/write"
+                className="w-full sm:w-auto inline-flex items-center justify-center space-x-2 px-6 py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-sm transition-all shadow-lg shadow-amber-500/20"
               >
-                <span>Create Pen Account</span>
-              </button>
+                <Feather className="w-4 h-4" />
+                <span>Go to Studio</span>
+              </Link>
             )}
           </div>
 

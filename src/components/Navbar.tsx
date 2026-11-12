@@ -14,6 +14,7 @@ import {
   Sparkles,
   ShieldCheck,
   UserCheck,
+  LogIn,
   ChevronDown,
   LogOut,
   Flame,
@@ -30,9 +31,9 @@ export function Navbar() {
     unreadWhispersCount,
     ambientTrack,
     setAmbientTrack,
-    setIsAuthModalOpen,
+    openAuthModal,
     generateNewPenIdentity,
-    logout,
+    signOut,
   } = useQuinspen();
 
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
@@ -111,8 +112,8 @@ export function Navbar() {
             })}
           </nav>
 
-          {/* Right Controls: Ambient Sound & Anonymous Identity */}
-          <div className="flex items-center space-x-3">
+          {/* Right Controls: Ambient Sound & Distinct Auth Buttons */}
+          <div className="flex items-center space-x-2.5">
             {/* Ambient Sound Dropdown */}
             <div className="relative">
               <button
@@ -122,7 +123,7 @@ export function Navbar() {
                     ? "bg-amber-500/15 border-amber-500/40 text-amber-300 shadow-sm shadow-amber-500/10 animate-pulse"
                     : "bg-stone-900/80 border-stone-800 text-stone-400 hover:text-stone-200 hover:border-stone-700"
                 }`}
-                title="Toggle ambient background sounds for immersive reading & writing"
+                title="Toggle ambient background sounds"
               >
                 {ambientTrack === "none" ? (
                   <VolumeX className="w-3.5 h-3.5" />
@@ -167,7 +168,7 @@ export function Navbar() {
               )}
             </div>
 
-            {/* User Profile / Auth State */}
+            {/* User Profile / Distinct Sign In & Sign Up Buttons */}
             {currentUser ? (
               <div className="relative">
                 <button
@@ -232,25 +233,37 @@ export function Navbar() {
 
                     <button
                       onClick={() => {
-                        logout();
+                        signOut();
                         setIsProfileMenuOpen(false);
                       }}
                       className="w-full flex items-center space-x-2 px-3 py-2 rounded-lg text-xs font-medium text-rose-400 hover:bg-rose-500/10 transition-colors border-t border-stone-800/80 mt-1 pt-2"
                     >
                       <LogOut className="w-3.5 h-3.5" />
-                      <span>Leave Pen Session</span>
+                      <span>Sign Out</span>
                     </button>
                   </div>
                 )}
               </div>
             ) : (
-              <button
-                onClick={() => setIsAuthModalOpen(true)}
-                className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-amber-500 text-stone-950 font-medium text-xs hover:bg-amber-400 transition-colors shadow-sm shadow-amber-500/20"
-              >
-                <UserCheck className="w-3.5 h-3.5" />
-                <span>Sign In Anonymously</span>
-              </button>
+              <div className="flex items-center space-x-2">
+                {/* Sign In Button (Existing Users) */}
+                <button
+                  onClick={() => openAuthModal("signin")}
+                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-stone-800 bg-stone-900/90 text-stone-300 hover:text-white hover:border-amber-500/40 font-medium text-xs transition-all"
+                >
+                  <LogIn className="w-3.5 h-3.5 text-stone-400" />
+                  <span>Sign In</span>
+                </button>
+
+                {/* Sign Up Button (New Users) */}
+                <button
+                  onClick={() => openAuthModal("signup")}
+                  className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs shadow-md shadow-amber-500/20 transition-all"
+                >
+                  <UserCheck className="w-3.5 h-3.5" />
+                  <span>Sign Up</span>
+                </button>
+              </div>
             )}
           </div>
         </div>

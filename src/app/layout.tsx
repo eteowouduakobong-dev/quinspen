@@ -6,6 +6,7 @@ import { QuinspenProvider } from "@/context/QuinspenContext";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { AuthModal } from "@/components/AuthModal";
+import { SanctuaryEntryGate } from "@/components/SanctuaryEntryGate";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -50,6 +51,7 @@ export default function RootLayout({
           <main className="flex-1 flex flex-col">{children}</main>
           <Footer />
           <AuthModal />
+          <SanctuaryEntryGate />
         </QuinspenProvider>
       </body>
     </html>

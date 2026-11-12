@@ -22,6 +22,7 @@ export default function WhispersPage() {
   const {
     whispers,
     currentUser,
+    openAuthModal,
     respondToWhisper,
     sendWhisperMessage,
     markWhisperAsRead,
@@ -77,6 +78,36 @@ export default function WhispersPage() {
       isInitiator: true,
     };
   };
+
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-stone-950 text-stone-100 flex items-center justify-center p-4">
+        <div className="max-w-md w-full text-center p-8 rounded-3xl bg-stone-900 border border-stone-800 shadow-2xl">
+          <MessageCircle className="w-12 h-12 text-indigo-400 mx-auto mb-4" />
+          <h2 className="font-serif text-2xl font-bold text-stone-100 mb-2">
+            Sign In for Whispers
+          </h2>
+          <p className="text-xs text-stone-400 mb-6 leading-relaxed">
+            Whispers are private 1-on-1 dialogues between masked storytellers. Create an account or sign in to receive and send anonymous messages.
+          </p>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              onClick={() => openAuthModal("signup")}
+              className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-amber-500 text-stone-950 font-bold text-xs hover:bg-amber-400 transition-colors shadow-lg shadow-amber-500/20"
+            >
+              Sign Up (New User)
+            </button>
+            <button
+              onClick={() => openAuthModal("signin")}
+              className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-stone-800 text-stone-200 font-semibold text-xs hover:bg-stone-700 transition-colors"
+            >
+              Sign In (Existing)
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-stone-950 text-stone-100 py-8">

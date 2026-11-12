@@ -32,7 +32,7 @@ export default function MyChroniclePage() {
     toggleBookmark,
     updatePenProfile,
     generateNewPenIdentity,
-    setIsAuthModalOpen,
+    openAuthModal,
   } = useQuinspen();
 
   const [activeTab, setActiveTab] = useState<
@@ -77,6 +77,36 @@ export default function MyChroniclePage() {
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 2000);
   };
+
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-stone-950 text-stone-100 flex items-center justify-center p-4">
+        <div className="max-w-md w-full text-center p-8 rounded-3xl bg-stone-900 border border-stone-800 shadow-2xl">
+          <BookMarked className="w-12 h-12 text-amber-400 mx-auto mb-4" />
+          <h2 className="font-serif text-2xl font-bold text-stone-100 mb-2">
+            Access Your Chronicle
+          </h2>
+          <p className="text-xs text-stone-400 mb-6 leading-relaxed">
+            Your chronicle maintains the complete record of your penned stories, saved reflections, and whispers in 100% privacy. Please sign in or create an account with your email.
+          </p>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              onClick={() => openAuthModal("signup")}
+              className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-amber-500 text-stone-950 font-bold text-xs hover:bg-amber-400 transition-colors shadow-lg shadow-amber-500/20"
+            >
+              Sign Up (New User)
+            </button>
+            <button
+              onClick={() => openAuthModal("signin")}
+              className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-stone-800 text-stone-200 font-semibold text-xs hover:bg-stone-700 transition-colors"
+            >
+              Sign In (Existing)
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-stone-950 text-stone-100 py-10">

@@ -1,6 +1,6 @@
 -- =========================================================
 -- QUINSPEN - Anonymous Storytelling Platform Database Schema
--- Supabase PostgreSQL Schema
+-- Supabase PostgreSQL Schema & Auth Sync
 -- =========================================================
 
 -- Enable UUID extension
@@ -103,3 +103,32 @@ CREATE INDEX IF NOT EXISTS idx_reaction_story ON public."Reaction"("storyId");
 CREATE INDEX IF NOT EXISTS idx_comment_story ON public."Comment"("storyId");
 CREATE INDEX IF NOT EXISTS idx_whisper_conn_users ON public."WhisperConnection"("initiatorId", "recipientId");
 CREATE INDEX IF NOT EXISTS idx_whisper_msg_conn ON public."WhisperMessage"("connectionId");
+
+-- 8. AUTOMATIC SUPABASE AUTH SYNC TRIGGER
+-- Automatically creates an anonymous pen profile when a user signs up via Supabase Auth
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO public."User" (id, email, "penName", "penTag", "avatarIcon", "avatarColor", bio)
+  VALUES (
+    new.id,
+    new.email,
+    COALESCE(new.raw_user_meta_data->>'penName', 'Anonymous Scribe'),
+    COALESCE(new.raw_user_meta_data->>'penTag', 'scribe_' || floor(random() * 900 + 100)::text),
+    COALESCE(new.raw_user_meta_data->>'avatarIcon', 'feather'),
+    COALESCE(new.raw_user_meta_data->>'avatarColor', 'amber'),
+    COALESCE(new.raw_user_meta_data->>'bio', 'A quiet traveler carrying untold memories.')
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    email = EXCLUDED.email,
+    "penName" = COALESCE(EXCLUDED."penName", public."User"."penName"),
+    "updatedAt" = now();
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Trigger linking auth.users to public."User"
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
