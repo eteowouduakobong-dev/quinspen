@@ -7,6 +7,7 @@ import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { AuthModal } from "@/components/AuthModal";
 import { SanctuaryEntryGate } from "@/components/SanctuaryEntryGate";
+import { LayoutShell } from "@/components/LayoutShell";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -52,6 +53,7 @@ export default function RootLayout({
           <Footer />
           <AuthModal />
           <SanctuaryEntryGate />
+          <LayoutShell />
         </QuinspenProvider>
       </body>
     </html>

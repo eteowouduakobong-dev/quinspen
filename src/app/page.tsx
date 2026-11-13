@@ -319,33 +319,69 @@ export default function HomePage() {
           </div>
         ) : (
           <div className="py-20 text-center rounded-2xl bg-stone-900/40 border border-stone-800/80 p-8">
-            <div className="w-12 h-12 mx-auto rounded-xl bg-stone-800 flex items-center justify-center text-amber-400 mb-4">
-              <Feather className="w-6 h-6" />
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-amber-900/40 to-rose-900/40 border border-amber-700/30 flex items-center justify-center text-amber-400 mb-5">
+              <Feather className="w-8 h-8" />
             </div>
-            <h3 className="font-serif text-xl font-bold text-stone-200 mb-2">
-              No Untold Stories Found
-            </h3>
-            <p className="text-sm text-stone-400 max-w-md mx-auto mb-6">
-              No stories match your current filters. Be the first anonymous voice to break the silence in this circle.
-            </p>
-            <div className="flex items-center justify-center space-x-3">
-              <button
-                onClick={() => {
-                  setSelectedCircle("all");
-                  setSelectedMood("all");
-                  setSearchQuery("");
-                }}
-                className="px-4 py-2 rounded-xl bg-stone-800 text-xs font-medium text-stone-300 hover:bg-stone-700 transition-colors"
-              >
-                Clear Filters
-              </button>
-              <Link
-                href="/write"
-                className="px-4 py-2 rounded-xl bg-amber-500 text-stone-950 text-xs font-semibold hover:bg-amber-400 transition-colors"
-              >
-                Pen the First Story
-              </Link>
-            </div>
+            {selectedCircle === "all" && selectedMood === "all" && !searchQuery.trim() ? (
+              <>
+                <h3 className="font-serif text-2xl font-bold text-stone-100 mb-3">
+                  The Sanctuary Awaits Its First Stories
+                </h3>
+                <p className="text-sm text-stone-400 max-w-md mx-auto mb-2 leading-relaxed">
+                  This is a safe, compassionate space where your truth matters. Share your story anonymously —
+                  no judgment, no condemnation, only open hearts listening.
+                </p>
+                <p className="text-xs text-stone-500 max-w-sm mx-auto mb-7 italic">
+                  Your identity is always protected. You write in peace, you are heard in peace.
+                </p>
+                <div className="flex items-center justify-center gap-3 flex-wrap">
+                  {currentUser ? (
+                    <Link
+                      href="/write"
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 text-stone-950 text-sm font-semibold hover:from-amber-400 hover:to-amber-300 transition-all shadow-lg shadow-amber-500/20"
+                    >
+                      <Feather className="w-4 h-4" />
+                      Write the First Story
+                    </Link>
+                  ) : (
+                    <button
+                      onClick={() => openAuthModal("signup")}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 text-stone-950 text-sm font-semibold hover:from-amber-400 hover:to-amber-300 transition-all shadow-lg shadow-amber-500/20"
+                    >
+                      <Feather className="w-4 h-4" />
+                      Join &amp; Share Your Story
+                    </button>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="font-serif text-xl font-bold text-stone-200 mb-2">
+                  No Stories Match Your Filters
+                </h3>
+                <p className="text-sm text-stone-400 max-w-md mx-auto mb-6">
+                  Try adjusting your filters, or be the first to share in this circle.
+                </p>
+                <div className="flex items-center justify-center space-x-3">
+                  <button
+                    onClick={() => {
+                      setSelectedCircle("all");
+                      setSelectedMood("all");
+                      setSearchQuery("");
+                    }}
+                    className="px-4 py-2 rounded-xl bg-stone-800 text-xs font-medium text-stone-300 hover:bg-stone-700 transition-colors"
+                  >
+                    Clear Filters
+                  </button>
+                  <Link
+                    href="/write"
+                    className="px-4 py-2 rounded-xl bg-amber-500 text-stone-950 text-xs font-semibold hover:bg-amber-400 transition-colors"
+                  >
+                    Pen a Story
+                  </Link>
+                </div>
+              </>
+            )}
           </div>
         )}
       </section>

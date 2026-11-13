@@ -34,6 +34,7 @@ interface QuinspenContextType {
   unreadWhispersCount: number;
   isAuthModalOpen: boolean;
   authModalMode: "signin" | "signup";
+  isListenerModalOpen: boolean;
 
   // Actions
   setSelectedCircle: (circle: CircleSlug | "all") => void;
@@ -42,6 +43,8 @@ interface QuinspenContextType {
   setAmbientTrack: (track: "none" | "rain" | "fire" | "wind") => void;
   openAuthModal: (mode: "signin" | "signup") => void;
   closeAuthModal: () => void;
+  openListenerModal: () => void;
+  closeListenerModal: () => void;
 
   signUpWithEmail: (
     email: string,
@@ -114,6 +117,7 @@ export function QuinspenProvider({ children }: { children: React.ReactNode }) {
   const [ambientTrack, setAmbientTrackState] = useState<"none" | "rain" | "fire" | "wind">("none");
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<"signin" | "signup">("signup");
+  const [isListenerModalOpen, setIsListenerModalOpen] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
 
   const supabase = createClient();
@@ -262,6 +266,9 @@ export function QuinspenProvider({ children }: { children: React.ReactNode }) {
   const closeAuthModal = () => {
     setIsAuthModalOpen(false);
   };
+
+  const openListenerModal = () => setIsListenerModalOpen(true);
+  const closeListenerModal = () => setIsListenerModalOpen(false);
 
   // Sign Up with Email primarily
   const signUpWithEmail = async (
@@ -850,12 +857,15 @@ export function QuinspenProvider({ children }: { children: React.ReactNode }) {
         unreadWhispersCount,
         isAuthModalOpen,
         authModalMode,
+        isListenerModalOpen,
         setSelectedCircle,
         setSelectedMood,
         setSearchQuery,
         setAmbientTrack,
         openAuthModal,
         closeAuthModal,
+        openListenerModal,
+        closeListenerModal,
         signUpWithEmail,
         signInWithEmail,
         signOut,

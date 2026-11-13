@@ -41,6 +41,17 @@ body {
   animation: fadeIn 0.3s ease-out forwards;
 }
 
+@keyframes gentle-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.4), 0 20px 60px rgba(0,0,0,0.5);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(244, 63, 94, 0), 0 20px 60px rgba(0,0,0,0.5);
+    transform: scale(1.03);
+  }
+}
+
 /* Print styles for Purpose Card / Manifesto */
 @media print {
   header, footer, button, nav {
