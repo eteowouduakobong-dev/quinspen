@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Feather,
@@ -38,6 +38,9 @@ const REACTION_CONFIG: {
 export function StoryReaderClient({ slug }: { slug: string }) {
   const {
     stories,
+    isLoadingAuth,
+    isLoadingStories,
+    storiesError,
     currentUser,
     userReactions,
     toggleReaction,
@@ -52,13 +55,64 @@ export function StoryReaderClient({ slug }: { slug: string }) {
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [localComments, setLocalComments] = useState<StoryComment[]>([]);
+  const [commentsError, setCommentsError] = useState<string | null>(null);
+  const [isPostingComment, setIsPostingComment] = useState(false);
+  const [interactionError, setInteractionError] = useState<string | null>(null);
   const [isWhisperModalOpen, setIsWhisperModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
   // Find story
   const story = stories.find((s) => s.slug === slug);
+  const storyId = story?.id;
+
+  useEffect(() => {
+    if (!storyId) return;
+    let active = true;
+    void fetch(`/api/stories/${storyId}/comments`, { cache: "no-store" })
+      .then(async (response) => {
+        const result: unknown = await response.json();
+        if (!response.ok) {
+          const message =
+            result && typeof result === "object" && "error" in result &&
+            typeof result.error === "string"
+              ? result.error
+              : "Could not load reflections.";
+          throw new Error(message);
+        }
+        if (!Array.isArray(result)) {
+          throw new Error("The reflection service returned an invalid response.");
+        }
+        return result as StoryComment[];
+      })
+      .then((comments) => {
+        if (active) {
+          setLocalComments(comments);
+          setCommentsError(null);
+        }
+      })
+      .catch((error: unknown) => {
+        console.error("Could not load story reflections:", error);
+        if (active) {
+          setLocalComments([]);
+          setCommentsError(
+            error instanceof Error ? error.message : "Could not load reflections."
+          );
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [storyId]);
 
   if (!story) {
+    if (isLoadingAuth || isLoadingStories) {
+      return (
+        <div className="min-h-screen bg-stone-950 flex items-center justify-center p-4 text-stone-400">
+          Opening story…
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen bg-stone-950 flex items-center justify-center p-4">
         <div className="text-center max-w-md">
@@ -67,7 +121,7 @@ export function StoryReaderClient({ slug }: { slug: string }) {
             Story Not Found
           </h2>
           <p className="text-sm text-stone-400 mb-6">
-            This anonymous memory may have been removed or placed in a private sanctuary.
+            {storiesError || "This story may have been removed or is no longer available."}
           </p>
           <Link
             href="/"
@@ -93,12 +147,22 @@ export function StoryReaderClient({ slug }: { slug: string }) {
     } catch {}
   };
 
-  const handlePostComment = (e: React.FormEvent) => {
+  const handlePostComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!commentText.trim()) return;
-    const newComment = addComment(story.id, commentText.trim());
-    setLocalComments((prev) => [newComment, ...prev]);
-    setCommentText("");
+    setIsPostingComment(true);
+    setCommentsError(null);
+    try {
+      const newComment = await addComment(story.id, commentText.trim());
+      setLocalComments((prev) => [newComment, ...prev]);
+      setCommentText("");
+    } catch (error) {
+      setCommentsError(
+        error instanceof Error ? error.message : "Could not post your reflection."
+      );
+    } finally {
+      setIsPostingComment(false);
+    }
   };
 
   const fontSizeClasses = {
@@ -280,7 +344,16 @@ export function StoryReaderClient({ slug }: { slug: string }) {
                 return (
                   <button
                     key={react.type}
-                    onClick={() => toggleReaction(story.id, react.type)}
+                    onClick={() => {
+                      setInteractionError(null);
+                      void toggleReaction(story.id, react.type).catch((error: unknown) => {
+                        setInteractionError(
+                          error instanceof Error
+                            ? error.message
+                            : "Could not save your reaction."
+                        );
+                      });
+                    }}
                     className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${
                       hasReacted
                         ? "bg-amber-500/20 border-amber-500/40 text-amber-300 scale-105 shadow-md shadow-amber-500/10"
@@ -296,6 +369,11 @@ export function StoryReaderClient({ slug }: { slug: string }) {
                 );
               })}
             </div>
+            {interactionError && (
+              <p role="alert" className="mt-3 text-center text-xs text-rose-300">
+                {interactionError}
+              </p>
+            )}
 
             {/* Actions: Bookmark & Share */}
             <div className="flex items-center justify-between pt-5 mt-5 border-t border-stone-800/70">
@@ -366,12 +444,17 @@ export function StoryReaderClient({ slug }: { slug: string }) {
                 </p>
               </div>
               <span className="px-2.5 py-1 rounded-full bg-stone-900 border border-stone-800 text-xs font-mono text-amber-400">
-                {story.commentsCount + localComments.length} reflections
+                {localComments.length} reflections
               </span>
             </div>
 
             {/* Leave reflection form */}
             <form onSubmit={handlePostComment} className="mb-8 space-y-3">
+              {commentsError && (
+                <p role="alert" className="text-xs text-rose-300">
+                  {commentsError}
+                </p>
+              )}
               <div className="relative">
                 <textarea
                   value={commentText}
@@ -392,17 +475,22 @@ export function StoryReaderClient({ slug }: { slug: string }) {
 
                 <button
                   type="submit"
-                  disabled={!commentText.trim()}
+                  disabled={!commentText.trim() || isPostingComment}
                   className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold text-xs disabled:opacity-50 transition-all"
                 >
                   <Send className="w-3.5 h-3.5" />
-                  <span>Post Reflection</span>
+                  <span>{isPostingComment ? "Posting..." : "Post Reflection"}</span>
                 </button>
               </div>
             </form>
 
             {/* Comments List */}
             <div className="space-y-4">
+              {localComments.length === 0 && !commentsError && (
+                <p className="text-sm text-stone-500">
+                  No reflections yet. Be the first to respond with care.
+                </p>
+              )}
               {localComments.map((comment) => (
                 <div
                   key={comment.id}
@@ -430,40 +518,6 @@ export function StoryReaderClient({ slug }: { slug: string }) {
                 </div>
               ))}
 
-              {/* Sample thoughtful reflections for atmosphere */}
-              <div className="p-4 rounded-xl bg-stone-900/60 border border-stone-800/80">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-6 h-6 rounded-md bg-stone-800 flex items-center justify-center text-amber-400 text-xs">
-                      <Feather className="w-3 h-3" />
-                    </div>
-                    <span className="text-xs font-semibold text-stone-200">
-                      Wandering Horizon
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-stone-500">Yesterday</span>
-                </div>
-                <p className="text-xs text-stone-300 leading-relaxed pl-8">
-                  "Reading this made me pause my entire day. It takes extraordinary bravery to put words to feelings we spent years hiding in the dark. Thank you for this gift."
-                </p>
-              </div>
-
-              <div className="p-4 rounded-xl bg-stone-900/60 border border-stone-800/80">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-6 h-6 rounded-md bg-stone-800 flex items-center justify-center text-amber-400 text-xs">
-                      <Feather className="w-3 h-3" />
-                    </div>
-                    <span className="text-xs font-semibold text-stone-200">
-                      Solitary Lantern
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-stone-500">2 days ago</span>
-                </div>
-                <p className="text-xs text-stone-300 leading-relaxed pl-8">
-                  "I had a knot in my throat reading the final three paragraphs. You are not alone in having carried that weight."
-                </p>
-              </div>
             </div>
           </section>
         </article>

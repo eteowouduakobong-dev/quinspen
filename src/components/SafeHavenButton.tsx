@@ -18,7 +18,7 @@ export function SafeHavenButton() {
   return (
     <button
       onClick={handleClick}
-      title="Talk to a compassionate listener — you are not alone"
+      title="Request a private conversation with a human listener"
       aria-label="Talk to a listener"
       className="
         fixed bottom-6 right-6 z-40

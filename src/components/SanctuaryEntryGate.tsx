@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   Feather,
   ShieldCheck,
@@ -36,11 +36,6 @@ export function SanctuaryEntryGate() {
   const [isLoading, setIsLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    const generated = generateRandomPenName();
-    setPenName(generated.penName);
-  }, []);
-
   // If already logged in or checking session, don't show gate
   if (isLoadingAuth || currentUser) {
     return null;
@@ -73,6 +68,8 @@ export function SanctuaryEntryGate() {
         const res = await signUpWithEmail(email, password, penName, bio);
         if (!res.success) {
           setErrorMessage(res.error || "Failed to create account.");
+        } else if (res.confirmationRequired) {
+          setSuccessMessage("Account created. Check your email to confirm it before signing in.");
         } else {
           setSuccessMessage("Account created successfully! Entering the sanctuary...");
         }

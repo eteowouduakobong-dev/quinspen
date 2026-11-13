@@ -37,6 +37,7 @@ const REACTION_CONFIG: {
 export function StoryCard({ story, onWhisperClick }: StoryCardProps) {
   const { toggleReaction, userReactions, toggleBookmark, bookmarkedIds } = useQuinspen();
   const [copied, setCopied] = useState(false);
+  const [interactionError, setInteractionError] = useState<string | null>(null);
 
   const isBookmarked = bookmarkedIds.includes(story.id);
   const userStoryReactions = userReactions[story.id] || [];
@@ -158,7 +159,14 @@ export function StoryCard({ story, onWhisperClick }: StoryCardProps) {
                   key={react.type}
                   onClick={(e) => {
                     e.preventDefault();
-                    toggleReaction(story.id, react.type);
+                    setInteractionError(null);
+                    void toggleReaction(story.id, react.type).catch((error: unknown) => {
+                      setInteractionError(
+                        error instanceof Error
+                          ? error.message
+                          : "Could not save your reaction."
+                      );
+                    });
                   }}
                   className={`flex items-center space-x-1 px-2 py-1 rounded-lg text-xs font-medium border transition-all duration-150 ${
                     hasReacted
@@ -183,6 +191,11 @@ export function StoryCard({ story, onWhisperClick }: StoryCardProps) {
             <span className="font-mono">{story.commentsCount}</span>
           </Link>
         </div>
+        {interactionError && (
+          <p role="alert" className="pt-2 text-[11px] text-rose-300">
+            {interactionError}
+          </p>
+        )}
       </div>
     </article>
   );

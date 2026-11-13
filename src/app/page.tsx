@@ -6,8 +6,6 @@ import {
   Feather,
   Sparkles,
   ShieldCheck,
-  MessageCircle,
-  BookMarked,
   Search,
   Filter,
   ArrowRight,
@@ -21,7 +19,7 @@ import { useQuinspen } from "@/context/QuinspenContext";
 import { StoryCard } from "@/components/StoryCard";
 import { WhisperModal } from "@/components/WhisperModal";
 import { STORY_CIRCLES } from "@/lib/quinspenData";
-import { StoryItem, CircleSlug, MoodType } from "@/types/quinspen";
+import { StoryItem, MoodType } from "@/types/quinspen";
 
 export default function HomePage() {
   const {
@@ -33,6 +31,8 @@ export default function HomePage() {
     searchQuery,
     setSearchQuery,
     currentUser,
+    isLoadingStories,
+    storiesError,
     openAuthModal,
   } = useQuinspen();
 
@@ -166,20 +166,24 @@ export default function HomePage() {
           {/* Quick Stats Ticker */}
           <div className="mt-12 grid grid-cols-2 sm:grid-cols-4 gap-4 border-t border-stone-800/60 pt-8 max-w-4xl mx-auto">
             <div className="p-3 rounded-xl bg-stone-900/40 border border-stone-800/40">
-              <p className="text-xl sm:text-2xl font-serif font-bold text-amber-400">100%</p>
-              <p className="text-xs text-stone-400">Identity Masked</p>
+              <p className="text-xl sm:text-2xl font-serif font-bold text-amber-400">
+                {isLoadingStories ? "…" : stories.length.toLocaleString()}
+              </p>
+              <p className="text-xs text-stone-400">Published user stories</p>
             </div>
             <div className="p-3 rounded-xl bg-stone-900/40 border border-stone-800/40">
-              <p className="text-xl sm:text-2xl font-serif font-bold text-stone-200">5,820+</p>
-              <p className="text-xs text-stone-400">Stories Penned</p>
+              <p className="text-xl sm:text-2xl font-serif font-bold text-stone-200">
+                {STORY_CIRCLES.length}
+              </p>
+              <p className="text-xs text-stone-400">Story circles</p>
             </div>
             <div className="p-3 rounded-xl bg-stone-900/40 border border-stone-800/40">
-              <p className="text-xl sm:text-2xl font-serif font-bold text-indigo-400">19,400+</p>
-              <p className="text-xs text-stone-400">Whispers Exchanged</p>
+              <p className="text-xl sm:text-2xl font-serif font-bold text-indigo-400">5</p>
+              <p className="text-xs text-stone-400">Ways to react</p>
             </div>
             <div className="p-3 rounded-xl bg-stone-900/40 border border-stone-800/40">
-              <p className="text-xl sm:text-2xl font-serif font-bold text-rose-400">48,000+</p>
-              <p className="text-xs text-stone-400">Tears & Hugs</p>
+              <p className="text-xl sm:text-2xl font-serif font-bold text-rose-400">Human</p>
+              <p className="text-xs text-stone-400">Listener support</p>
             </div>
           </div>
         </div>
@@ -322,7 +326,16 @@ export default function HomePage() {
             <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-amber-900/40 to-rose-900/40 border border-amber-700/30 flex items-center justify-center text-amber-400 mb-5">
               <Feather className="w-8 h-8" />
             </div>
-            {selectedCircle === "all" && selectedMood === "all" && !searchQuery.trim() ? (
+            {isLoadingStories || storiesError ? (
+              <>
+                <h3 className="font-serif text-2xl font-bold text-stone-100 mb-3">
+                  {isLoadingStories ? "Loading community stories..." : "Could not load community stories"}
+                </h3>
+                <p role={storiesError ? "alert" : undefined} className="text-sm text-stone-400 max-w-md mx-auto">
+                  {storiesError || "Loading published stories from registered community members."}
+                </p>
+              </>
+            ) : selectedCircle === "all" && selectedMood === "all" && !searchQuery.trim() ? (
               <>
                 <h3 className="font-serif text-2xl font-bold text-stone-100 mb-3">
                   The Sanctuary Awaits Its First Stories

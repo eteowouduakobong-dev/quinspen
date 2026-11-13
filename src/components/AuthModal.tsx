@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   Feather,
   ShieldCheck,
@@ -32,18 +32,27 @@ export function AuthModal() {
   const [password, setPassword] = useState("");
   const [penName, setPenName] = useState("Velvet Wanderer");
   const [bio, setBio] = useState("");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorState, setErrorState] = useState<{
+    mode: "signin" | "signup";
+    message: string;
+  } | null>(null);
+  const [successState, setSuccessState] = useState<{
+    mode: "signin" | "signup";
+    message: string;
+  } | null>(null);
 
   const isSignUp = authModalMode === "signup";
-
-  useEffect(() => {
-    const generated = generateRandomPenName();
-    setPenName(generated.penName);
-    setErrorMessage(null);
-    setSuccessMessage(null);
-  }, [authModalMode]);
+  const errorMessage =
+    errorState?.mode === authModalMode ? errorState.message : null;
+  const successMessage =
+    successState?.mode === authModalMode ? successState.message : null;
+  const setErrorMessage = (message: string | null) => {
+    setErrorState(message ? { mode: authModalMode, message } : null);
+  };
+  const setSuccessMessage = (message: string | null) => {
+    setSuccessState(message ? { mode: authModalMode, message } : null);
+  };
 
   if (!isAuthModalOpen) return null;
 
@@ -74,6 +83,8 @@ export function AuthModal() {
         const res = await signUpWithEmail(email, password, penName, bio);
         if (!res.success) {
           setErrorMessage(res.error || "Failed to create account.");
+        } else if (res.confirmationRequired) {
+          setSuccessMessage("Account created. Check your email to confirm it before signing in.");
         } else {
           setSuccessMessage("Account created successfully! Welcome to the sanctuary.");
           setTimeout(() => {

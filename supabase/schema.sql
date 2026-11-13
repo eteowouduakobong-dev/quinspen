@@ -19,6 +19,21 @@ CREATE TABLE IF NOT EXISTS public."User" (
   "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+ALTER TABLE public."User" ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can read their own pen profile" ON public."User";
+CREATE POLICY "Users can read their own pen profile"
+  ON public."User"
+  FOR SELECT
+  TO authenticated
+  USING (auth.uid() = id);
+DROP POLICY IF EXISTS "Users can update their own pen profile" ON public."User";
+CREATE POLICY "Users can update their own pen profile"
+  ON public."User"
+  FOR UPDATE
+  TO authenticated
+  USING (auth.uid() = id)
+  WITH CHECK (auth.uid() = id);
+
 -- 2. STORIES
 CREATE TABLE IF NOT EXISTS public."Story" (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -40,6 +55,14 @@ CREATE TABLE IF NOT EXISTS public."Story" (
   "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+ALTER TABLE public."Story" ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can delete their own stories" ON public."Story";
+CREATE POLICY "Users can delete their own stories"
+  ON public."Story"
+  FOR DELETE
+  TO authenticated
+  USING (auth.uid() = "authorId");
+
 -- 3. REACTIONS (Emotional Resonances)
 CREATE TABLE IF NOT EXISTS public."Reaction" (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -49,6 +72,8 @@ CREATE TABLE IF NOT EXISTS public."Reaction" (
   "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
   CONSTRAINT unique_story_user_reaction UNIQUE ("storyId", "userId", type)
 );
+ALTER TABLE public."Reaction" ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public."Reaction" FROM anon, authenticated;
 
 -- 4. COMMENTS (Reflections)
 CREATE TABLE IF NOT EXISTS public."Comment" (
@@ -63,6 +88,8 @@ CREATE TABLE IF NOT EXISTS public."Comment" (
   "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
   "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+ALTER TABLE public."Comment" ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public."Comment" FROM anon, authenticated;
 
 -- 5. BOOKMARKS (Saved Stories)
 CREATE TABLE IF NOT EXISTS public."Bookmark" (
@@ -95,6 +122,33 @@ CREATE TABLE IF NOT EXISTS public."WhisperMessage" (
   "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- 8. PRIVATE HUMAN LISTENER SESSIONS
+CREATE TABLE IF NOT EXISTS public."ListenerSession" (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "userId" UUID NOT NULL,
+  "penName" TEXT NOT NULL,
+  topic TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'WAITING', -- WAITING, ACTIVE, CLOSED
+  "assignedStaffId" UUID,
+  "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public."ListenerMessage" (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "sessionId" UUID NOT NULL REFERENCES public."ListenerSession"(id) ON DELETE CASCADE,
+  "senderId" UUID NOT NULL,
+  "senderRole" TEXT NOT NULL, -- USER or STAFF
+  "senderName" TEXT NOT NULL,
+  content TEXT NOT NULL,
+  "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public."ListenerSession" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."ListenerMessage" ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public."ListenerSession" FROM anon, authenticated;
+REVOKE ALL ON TABLE public."ListenerMessage" FROM anon, authenticated;
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_story_author ON public."Story"("authorId");
 CREATE INDEX IF NOT EXISTS idx_story_circle ON public."Story"("circleCategory");
@@ -103,8 +157,12 @@ CREATE INDEX IF NOT EXISTS idx_reaction_story ON public."Reaction"("storyId");
 CREATE INDEX IF NOT EXISTS idx_comment_story ON public."Comment"("storyId");
 CREATE INDEX IF NOT EXISTS idx_whisper_conn_users ON public."WhisperConnection"("initiatorId", "recipientId");
 CREATE INDEX IF NOT EXISTS idx_whisper_msg_conn ON public."WhisperMessage"("connectionId");
+CREATE INDEX IF NOT EXISTS idx_listener_session_user_status ON public."ListenerSession"("userId", status);
+CREATE INDEX IF NOT EXISTS idx_listener_session_status_created ON public."ListenerSession"(status, "createdAt");
+CREATE INDEX IF NOT EXISTS idx_listener_session_staff_status ON public."ListenerSession"("assignedStaffId", status);
+CREATE INDEX IF NOT EXISTS idx_listener_message_session_created ON public."ListenerMessage"("sessionId", "createdAt");
 
--- 8. AUTOMATIC SUPABASE AUTH SYNC TRIGGER
+-- 9. AUTOMATIC SUPABASE AUTH SYNC TRIGGER
 -- Automatically creates an anonymous pen profile when a user signs up via Supabase Auth
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$

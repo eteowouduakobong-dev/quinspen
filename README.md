@@ -10,7 +10,7 @@
 
 ### 1. 🛡️ 100% Identity Shield & Pen Identities
 - **Anonymous Pen Names**: Every account is granted an evocative anonymous persona (e.g., *Midnight Scribe*, *Florentine Ghost*, *Raindrop Scribe*) with a randomizer button.
-- **Strict Privacy Guarantee**: Real emails and identity markers are strictly guarded for account record-keeping only and are never exposed in public queries, feeds, or messages.
+- **Strict Privacy Controls**: Real emails stay in the account profile, which row-level security restricts to its owner. Story and reflection APIs expose pen names, not email addresses.
 - **Total Ghost Mode**: Writers can detach even their account pen name for specific posts, publishing under a transient alias (e.g. *Nameless Scribe*).
 
 ### 2. 🌌 Thematic Story Circles
@@ -47,6 +47,15 @@ Maintains a full, organized record of each user's contributions:
 ### 6. 🎧 Web Audio Ambience Synthesizer
 Built-in procedural soundscapes (Gentle Rain, Midnight Fireplace, Night Wind) generated with the Web Audio API without requiring bulky external audio downloads.
 
+### 7. 🤝 Real Human Listener Sessions
+- Stories, reactions, and reflections are stored in the shared database and require a verified Supabase account.
+- Safe Haven creates a private, persisted conversation request. It does not generate automated or simulated replies.
+- Authorized human staff accept waiting requests and answer from `/listener-inbox`. Public conversation views use pen names and do not expose account email addresses.
+- Staff access is controlled by the server-only `LISTENER_STAFF_EMAILS` environment variable. Add the exact, verified Supabase Auth emails for the people who will handle sessions.
+- A waiting request is not a promise of an immediate response. Continuous availability requires real staff coverage; this chat is not emergency or clinical care.
+
+For an existing database, run `npx prisma db push` to add the listener tables, then apply the updated `supabase/schema.sql` in the Supabase SQL Editor to enable the profile and private-listener row-level security rules. The SQL script is safe to re-run.
+
 ---
 
 ## 🛠️ Tech Stack
@@ -78,11 +87,12 @@ Populate the Supabase and Prisma connection strings:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+LISTENER_STAFF_EMAILS=listener@example.com
 DATABASE_URL="postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres?pgbouncer=true"
 DIRECT_URL="postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres"
 ```
 
-*(Note: The app is equipped with an intelligent fallback engine, allowing full interactive testing in local demo mode even before database credentials are populated!)*
+The app requires Supabase Auth and a configured PostgreSQL database for account registration, community stories, and listener sessions. It does not create local demo accounts or sample stories.
 
 ### 3. Generate Prisma Client & Push Schema
 ```bash

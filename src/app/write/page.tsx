@@ -4,14 +4,11 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Feather,
-  Sparkles,
   ShieldCheck,
   Eye,
   Edit3,
   Clock,
   Send,
-  Save,
-  HelpCircle,
   Ghost,
   User,
   Quote,
@@ -30,11 +27,12 @@ export default function WriteStoryPage() {
   const [circle, setCircle] = useState<CircleSlug>("midnight-confessions");
   const [mood, setMood] = useState<MoodType>("Vulnerable");
   const [tagsInput, setTagsInput] = useState("");
-  const [coverTheme, setCoverTheme] = useState("twilight-ink");
+  const coverTheme = "twilight-ink";
   const [isGhostMode, setIsGhostMode] = useState(false);
   const [ghostAlias, setGhostAlias] = useState("Nameless Scribe");
   const [activeTab, setActiveTab] = useState<"write" | "preview">("write");
   const [isPublishing, setIsPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
 
   // Compute word count and reading time
   const words = content.trim() ? content.trim().split(/\s+/).length : 0;
@@ -63,6 +61,7 @@ export default function WriteStoryPage() {
     if (!title.trim() || !content.trim()) return;
 
     setIsPublishing(true);
+    setPublishError(null);
 
     const tags = tagsInput
       .split(",")
@@ -89,8 +88,11 @@ export default function WriteStoryPage() {
 
       setIsPublishing(false);
       router.push(`/story/${created.slug}`);
-    } catch {
+    } catch (error) {
       setIsPublishing(false);
+      setPublishError(
+        error instanceof Error ? error.message : "Could not publish your story."
+      );
     }
   };
 
@@ -134,6 +136,11 @@ export default function WriteStoryPage() {
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
               <span>Anonymity Shield Active</span>
             </div>
+            {publishError && (
+              <p role="alert" className="mb-6 rounded-xl border border-rose-800/60 bg-rose-950/30 p-3 text-sm text-rose-200">
+                {publishError}
+              </p>
+            )}
             <h1 className="font-serif text-3xl sm:text-4xl font-bold text-stone-100">
               Story Studio
             </h1>

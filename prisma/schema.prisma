@@ -137,3 +137,32 @@ model WhisperMessage {
   @@index([connectionId])
   @@index([senderId])
 }
+
+model ListenerSession {
+  id                    String            @id @default(uuid())
+  userId                String
+  penName               String
+  topic                 String
+  status                String            @default("WAITING") // WAITING, ACTIVE, CLOSED
+  assignedStaffId       String?
+  messages              ListenerMessage[]
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  @@index([userId, status])
+  @@index([status, createdAt])
+  @@index([assignedStaffId, status])
+}
+
+model ListenerMessage {
+  id           String          @id @default(uuid())
+  sessionId    String
+  session      ListenerSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  senderId     String
+  senderRole   String          // USER or STAFF
+  senderName   String
+  content      String          @db.Text
+  createdAt    DateTime        @default(now())
+
+  @@index([sessionId, createdAt])
+}

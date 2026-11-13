@@ -47,7 +47,6 @@ export type MoodType =
 export interface StoryComment {
   id: string;
   storyId: string;
-  userId: string;
   content: string;
   penNameSnapshot: string;
   avatarIcon: string;
@@ -142,23 +141,4 @@ export interface UserChronicleRecord {
   activeWhispersCount: number;
   totalReadsReceived: number;
   totalResonancesReceived: number;
-}
-
-export interface AvailableListener {
-  id: string;
-  name: string;
-  role: string;
-  badge: string;
-  avatarIcon: "feather" | "moon" | "star" | "flame" | "compass" | "book" | "mask" | "sparkle";
-  avatarColor: "amber" | "indigo" | "emerald" | "rose" | "violet" | "cyan" | "slate";
-  specialties: string[];
-  intro: string;
-  isAvailable: boolean;
-}
-
-export interface ListenerChatMessage {
-  id: string;
-  sender: "user" | "listener" | "system";
-  content: string;
-  timestamp: string;
 }

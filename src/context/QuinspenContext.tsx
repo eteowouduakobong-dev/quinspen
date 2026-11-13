@@ -1,6 +1,7 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
+import type { User as SupabaseUser } from "@supabase/supabase-js";
 import {
   AnonymousPenIdentity,
   StoryItem,
@@ -11,11 +12,7 @@ import {
   CircleSlug,
   MoodType,
 } from "@/types/quinspen";
-import {
-  INITIAL_STORIES,
-  INITIAL_WHISPERS,
-  generateRandomPenName,
-} from "@/lib/quinspenData";
+import { INITIAL_WHISPERS, generateRandomPenName } from "@/lib/quinspenData";
 import { ambientSound } from "@/lib/ambientSound";
 import { createClient } from "@/lib/supabase/client";
 
@@ -23,6 +20,8 @@ interface QuinspenContextType {
   currentUser: AnonymousPenIdentity | null;
   isLoggedIn: boolean;
   isLoadingAuth: boolean;
+  isLoadingStories: boolean;
+  storiesError: string | null;
   stories: StoryItem[];
   whispers: WhisperConnectionItem[];
   bookmarkedIds: string[];
@@ -51,7 +50,7 @@ interface QuinspenContextType {
     password: string,
     penName: string,
     bio?: string
-  ) => Promise<{ success: boolean; error?: string }>;
+  ) => Promise<{ success: boolean; error?: string; confirmationRequired?: boolean }>;
   signInWithEmail: (
     email: string,
     password: string
@@ -78,8 +77,8 @@ interface QuinspenContextType {
     >
   ) => Promise<StoryItem>;
   deleteStory: (storyId: string) => void;
-  toggleReaction: (storyId: string, reactionType: ReactionType) => void;
-  addComment: (storyId: string, content: string) => StoryComment;
+  toggleReaction: (storyId: string, reactionType: ReactionType) => Promise<void>;
+  addComment: (storyId: string, content: string) => Promise<StoryComment>;
   toggleBookmark: (storyId: string) => void;
 
   sendWhisperRequest: (
@@ -96,18 +95,37 @@ interface QuinspenContextType {
 const QuinspenContext = createContext<QuinspenContextType | undefined>(undefined);
 
 const STORAGE_KEYS = {
-  USER: "quinspen_user_identity_v2",
-  ACCOUNTS_DB: "quinspen_registered_accounts_v2",
-  STORIES: "quinspen_stories_catalog_v2",
   WHISPERS: "quinspen_whispers_v2",
   BOOKMARKS: "quinspen_bookmarks_v2",
-  REACTIONS: "quinspen_reactions_v2",
 };
 
+function identityFromAuthUser(user: SupabaseUser): AnonymousPenIdentity {
+  const metadata = user.user_metadata || {};
+  return {
+    id: user.id,
+    email: user.email || "",
+    penName:
+      typeof metadata.penName === "string" ? metadata.penName : "Anonymous Scribe",
+    penTag:
+      typeof metadata.penTag === "string"
+        ? metadata.penTag
+        : `scribe_${user.id.slice(0, 8)}`,
+    avatarIcon: metadata.avatarIcon || "feather",
+    avatarColor: metadata.avatarColor || "amber",
+    bio: metadata.bio || "A traveler in the world of untold memories.",
+    createdAt: user.created_at,
+  };
+}
+
 export function QuinspenProvider({ children }: { children: React.ReactNode }) {
+  const hasAuthConfig = Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
   const [currentUser, setCurrentUser] = useState<AnonymousPenIdentity | null>(null);
-  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
-  const [stories, setStories] = useState<StoryItem[]>(INITIAL_STORIES);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(hasAuthConfig);
+  const [isLoadingStories, setIsLoadingStories] = useState(hasAuthConfig);
+  const [storiesError, setStoriesError] = useState<string | null>(null);
+  const [stories, setStories] = useState<StoryItem[]>([]);
   const [whispers, setWhispers] = useState<WhisperConnectionItem[]>(INITIAL_WHISPERS);
   const [bookmarkedIds, setBookmarkedIds] = useState<string[]>([]);
   const [userReactions, setUserReactions] = useState<{ [storyId: string]: ReactionType[] }>({});
@@ -118,139 +136,142 @@ export function QuinspenProvider({ children }: { children: React.ReactNode }) {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<"signin" | "signup">("signup");
   const [isListenerModalOpen, setIsListenerModalOpen] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
-
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
+  const currentUserId = currentUser?.id;
 
   // Initialize Auth & Supabase Session
   useEffect(() => {
-    async function initAuth() {
-      try {
-        if (supabase) {
-          // Check active Supabase session
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.user) {
-            const meta = session.user.user_metadata || {};
-            const penIdentity: AnonymousPenIdentity = {
-              id: session.user.id,
-              email: session.user.email || "",
-              penName: meta.penName || "Anonymous Scribe",
-              penTag: meta.penTag || `scribe_${Math.floor(100 + Math.random() * 900)}`,
-              avatarIcon: meta.avatarIcon || "feather",
-              avatarColor: meta.avatarColor || "amber",
-              bio: meta.bio || "A traveler in the world of untold memories.",
-              createdAt: session.user.created_at,
-            };
-            setCurrentUser(penIdentity);
-          } else {
-            // Check local persistence
-            const savedUser = localStorage.getItem(STORAGE_KEYS.USER);
-            if (savedUser) {
-              setCurrentUser(JSON.parse(savedUser));
-            }
-          }
+    if (!supabase) return;
 
-          // Listen for Supabase auth state changes
-          const { data: { subscription } } = supabase.auth.onAuthStateChange(
-            async (_event, session) => {
-              if (session?.user) {
-                const meta = session.user.user_metadata || {};
-                const penIdentity: AnonymousPenIdentity = {
-                  id: session.user.id,
-                  email: session.user.email || "",
-                  penName: meta.penName || "Anonymous Scribe",
-                  penTag: meta.penTag || `scribe_${Math.floor(100 + Math.random() * 900)}`,
-                  avatarIcon: meta.avatarIcon || "feather",
-                  avatarColor: meta.avatarColor || "amber",
-                  bio: meta.bio || "A traveler in the world of untold memories.",
-                  createdAt: session.user.created_at,
-                };
-                setCurrentUser(penIdentity);
-              } else {
-                setCurrentUser(null);
-              }
-            }
-          );
-
-          return () => {
-            subscription.unsubscribe();
-          };
-        } else {
-          // If Supabase credentials are not yet set in .env, check localStorage
-          const savedUser = localStorage.getItem(STORAGE_KEYS.USER);
-          if (savedUser) {
-            setCurrentUser(JSON.parse(savedUser));
-          }
-        }
-
-        // Load data cache
-        const savedStories = localStorage.getItem(STORAGE_KEYS.STORIES);
-        if (savedStories) {
-          const parsed = JSON.parse(savedStories);
-          if (Array.isArray(parsed) && parsed.length > 0) setStories(parsed);
-        }
-
-        const savedWhispers = localStorage.getItem(STORAGE_KEYS.WHISPERS);
-        if (savedWhispers) {
-          const parsed = JSON.parse(savedWhispers);
-          if (Array.isArray(parsed)) setWhispers(parsed);
-        }
-
-        const savedBookmarks = localStorage.getItem(STORAGE_KEYS.BOOKMARKS);
-        if (savedBookmarks) setBookmarkedIds(JSON.parse(savedBookmarks));
-
-        const savedReactions = localStorage.getItem(STORAGE_KEYS.REACTIONS);
-        if (savedReactions) setUserReactions(JSON.parse(savedReactions));
-      } catch {
-        // Fallback
-      } finally {
-        setIsLoadingAuth(false);
-        setIsInitialized(true);
+    let active = true;
+    const updateAuthState = (user: SupabaseUser | null) => {
+      if (!active) return;
+      setCurrentUser(user ? identityFromAuthUser(user) : null);
+      setIsLoadingAuth(false);
+      setIsLoadingStories(Boolean(user));
+      setStoriesError(null);
+      if (!user) {
+        setStories([]);
+        setUserReactions({});
       }
-    }
+    };
 
-    initAuth();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        updateAuthState(session?.user || null);
+      }
+    );
+
+    void supabase.auth.getSession().then(({ data, error }) => {
+      if (error) console.error("Could not restore the Supabase session:", error);
+      updateAuthState(data.session?.user || null);
+    }).catch((error: unknown) => {
+      console.error("Could not restore the Supabase session:", error);
+      updateAuthState(null);
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
+
+  useEffect(() => {
+    try {
+      for (const key of [
+        "quinspen_user_identity_v2",
+        "quinspen_registered_accounts_v2",
+        "quinspen_stories_catalog_v2",
+        "quinspen_reactions_v2",
+      ]) {
+        localStorage.removeItem(key);
+      }
+      const savedWhispers = localStorage.getItem(STORAGE_KEYS.WHISPERS);
+      const savedBookmarks = localStorage.getItem(STORAGE_KEYS.BOOKMARKS);
+      const parsedWhispers: unknown = savedWhispers ? JSON.parse(savedWhispers) : null;
+      const parsedBookmarks: unknown = savedBookmarks ? JSON.parse(savedBookmarks) : null;
+      queueMicrotask(() => {
+        if (Array.isArray(parsedWhispers)) {
+          setWhispers(parsedWhispers as WhisperConnectionItem[]);
+        }
+        if (
+          Array.isArray(parsedBookmarks) &&
+          parsedBookmarks.every((bookmark) => typeof bookmark === "string")
+        ) {
+          setBookmarkedIds(parsedBookmarks);
+        }
+      });
+    } catch (error) {
+      console.error("Could not restore local preferences:", error);
+    }
   }, []);
 
-  // Sync state to localStorage for offline / persistence
   useEffect(() => {
-    if (!isInitialized) return;
-    try {
-      if (currentUser) {
-        localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(currentUser));
-      } else {
-        localStorage.removeItem(STORAGE_KEYS.USER);
-      }
-    } catch {}
-  }, [currentUser, isInitialized]);
-
-  useEffect(() => {
-    if (!isInitialized) return;
-    try {
-      localStorage.setItem(STORAGE_KEYS.STORIES, JSON.stringify(stories));
-    } catch {}
-  }, [stories, isInitialized]);
-
-  useEffect(() => {
-    if (!isInitialized) return;
     try {
       localStorage.setItem(STORAGE_KEYS.WHISPERS, JSON.stringify(whispers));
-    } catch {}
-  }, [whispers, isInitialized]);
+    } catch (error) {
+      console.error("Could not save local whispers:", error);
+    }
+  }, [whispers]);
 
   useEffect(() => {
-    if (!isInitialized) return;
     try {
       localStorage.setItem(STORAGE_KEYS.BOOKMARKS, JSON.stringify(bookmarkedIds));
-    } catch {}
-  }, [bookmarkedIds, isInitialized]);
+    } catch (error) {
+      console.error("Could not save local bookmarks:", error);
+    }
+  }, [bookmarkedIds]);
 
   useEffect(() => {
-    if (!isInitialized) return;
-    try {
-      localStorage.setItem(STORAGE_KEYS.REACTIONS, JSON.stringify(userReactions));
-    } catch {}
-  }, [userReactions, isInitialized]);
+    if (!currentUserId) return;
+
+    let active = true;
+    void fetch("/api/stories", { cache: "no-store" })
+      .then(async (response) => {
+        const result: unknown = await response.json();
+        if (!response.ok) {
+          const message =
+            result && typeof result === "object" && "error" in result &&
+            typeof result.error === "string"
+              ? result.error
+              : "Could not load community stories.";
+          throw new Error(message);
+        }
+        if (!Array.isArray(result)) {
+          throw new Error("The story service returned an invalid response.");
+        }
+        return result as StoryItem[];
+      })
+      .then((loadedStories) => {
+        if (!active) return;
+        setStories(loadedStories);
+        setIsLoadingStories(false);
+        setUserReactions(
+          Object.fromEntries(
+            loadedStories.map((story) => [
+              story.id,
+              Object.entries(story.reactions.userReacted || {})
+                .filter(([, reacted]) => reacted)
+                .map(([type]) => type as ReactionType),
+            ])
+          )
+        );
+      })
+      .catch((error: unknown) => {
+        console.error("Could not load community stories:", error);
+        if (active) {
+          setStories([]);
+          setIsLoadingStories(false);
+          setStoriesError(
+            error instanceof Error ? error.message : "Could not load community stories."
+          );
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [currentUserId]);
 
   // Ambient sound controller
   const setAmbientTrack = (track: "none" | "rain" | "fire" | "wind") => {
@@ -276,92 +297,47 @@ export function QuinspenProvider({ children }: { children: React.ReactNode }) {
     password: string,
     penName: string,
     bio?: string
-  ): Promise<{ success: boolean; error?: string }> => {
+  ): Promise<{ success: boolean; error?: string; confirmationRequired?: boolean }> => {
     const cleanEmail = email.trim().toLowerCase();
     const cleanPenName = penName.trim() || generateRandomPenName().penName;
     const penTag = `scribe_${Math.floor(100 + Math.random() * 900)}`;
 
     try {
-      if (supabase) {
-        // Supabase Auth sign up
-        const { data, error } = await supabase.auth.signUp({
-          email: cleanEmail,
-          password,
-          options: {
-            data: {
-              penName: cleanPenName,
-              penTag,
-              avatarIcon: "feather",
-              avatarColor: "amber",
-              bio: bio || "A traveler in the world of untold memories.",
-            },
-          },
-        });
+      if (!supabase) {
+        return {
+          success: false,
+          error: "Account services are not configured. Please contact the site administrator.",
+        };
+      }
 
-        if (error) {
-          return { success: false, error: error.message };
-        }
-
-        if (data.user) {
-          const newUser: AnonymousPenIdentity = {
-            id: data.user.id,
-            email: cleanEmail,
+      const { data, error } = await supabase.auth.signUp({
+        email: cleanEmail,
+        password,
+        options: {
+          data: {
             penName: cleanPenName,
             penTag,
             avatarIcon: "feather",
             avatarColor: "amber",
             bio: bio || "A traveler in the world of untold memories.",
-            createdAt: data.user.created_at,
-          };
-          setCurrentUser(newUser);
+          },
+        },
+      });
 
-          // Sync into public."User" table in Supabase
-          try {
-            await supabase.from("User").upsert({
-              id: data.user.id,
-              email: cleanEmail,
-              penName: cleanPenName,
-              penTag,
-              avatarIcon: "feather",
-              avatarColor: "amber",
-              bio: bio || "A traveler in the world of untold memories.",
-            });
-          } catch {}
-
-          setIsAuthModalOpen(false);
-          return { success: true };
-        }
+      if (error) {
+        return { success: false, error: error.message };
       }
 
-      // Local persistent accounts database if Supabase env is not configured yet
-      const accountsRaw = localStorage.getItem(STORAGE_KEYS.ACCOUNTS_DB);
-      const accounts = accountsRaw ? JSON.parse(accountsRaw) : {};
-
-      if (accounts[cleanEmail]) {
-        return {
-          success: false,
-          error: "An account with this email already exists. Please Sign In instead.",
-        };
+      if (!data.user) {
+        return { success: false, error: "Account creation did not return a user." };
       }
 
-      const newId = "user-" + Math.random().toString(36).substring(2, 10);
-      const newUser: AnonymousPenIdentity = {
-        id: newId,
-        email: cleanEmail,
-        penName: cleanPenName,
-        penTag,
-        avatarIcon: "feather",
-        avatarColor: "amber",
-        bio: bio || "A quiet traveler carrying untold memories.",
-        createdAt: new Date().toISOString(),
-      };
+      if (!data.session) {
+        return { success: true, confirmationRequired: true };
+      }
 
-      accounts[cleanEmail] = {
-        user: newUser,
-        password, // stored locally for client evaluation
-      };
-      localStorage.setItem(STORAGE_KEYS.ACCOUNTS_DB, JSON.stringify(accounts));
-      setCurrentUser(newUser);
+      setCurrentUser(identityFromAuthUser(data.user));
+      setIsLoadingStories(true);
       setIsAuthModalOpen(false);
       return { success: true };
     } catch (err: unknown) {
@@ -380,50 +356,28 @@ export function QuinspenProvider({ children }: { children: React.ReactNode }) {
     const cleanEmail = email.trim().toLowerCase();
 
     try {
-      if (supabase) {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: cleanEmail,
-          password,
-        });
-
-        if (error) {
-          return { success: false, error: error.message };
-        }
-
-        if (data.user) {
-          const meta = data.user.user_metadata || {};
-          const identity: AnonymousPenIdentity = {
-            id: data.user.id,
-            email: cleanEmail,
-            penName: meta.penName || "Anonymous Scribe",
-            penTag: meta.penTag || `scribe_${Math.floor(100 + Math.random() * 900)}`,
-            avatarIcon: meta.avatarIcon || "feather",
-            avatarColor: meta.avatarColor || "amber",
-            bio: meta.bio || "A traveler in the world of untold memories.",
-            createdAt: data.user.created_at,
-          };
-          setCurrentUser(identity);
-          setIsAuthModalOpen(false);
-          return { success: true };
-        }
-      }
-
-      // Local accounts database fallback
-      const accountsRaw = localStorage.getItem(STORAGE_KEYS.ACCOUNTS_DB);
-      const accounts = accountsRaw ? JSON.parse(accountsRaw) : {};
-
-      if (!accounts[cleanEmail]) {
+      if (!supabase) {
         return {
           success: false,
-          error: "No account found with this email. Please click Sign Up to create one.",
+          error: "Account services are not configured. Please contact the site administrator.",
         };
       }
 
-      if (accounts[cleanEmail].password !== password) {
-        return { success: false, error: "Incorrect password. Please try again." };
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password,
+      });
+
+      if (error) {
+        return { success: false, error: error.message };
       }
 
-      setCurrentUser(accounts[cleanEmail].user);
+      if (!data.user || !data.session) {
+        return { success: false, error: "Sign in did not establish an active session." };
+      }
+
+      setCurrentUser(identityFromAuthUser(data.user));
+      setIsLoadingStories(true);
       setIsAuthModalOpen(false);
       return { success: true };
     } catch (err: unknown) {
@@ -436,12 +390,15 @@ export function QuinspenProvider({ children }: { children: React.ReactNode }) {
 
   // Sign Out
   const signOut = async () => {
-    try {
-      if (supabase) {
-        await supabase.auth.signOut();
-      }
-    } catch {}
+    if (!supabase) {
+      throw new Error("Account services are not configured.");
+    }
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
     setCurrentUser(null);
+    setStories([]);
+    setUserReactions({});
+    setIsLoadingStories(false);
   };
 
   const updatePenProfile = (updates: Partial<AnonymousPenIdentity>) => {
@@ -501,61 +458,21 @@ export function QuinspenProvider({ children }: { children: React.ReactNode }) {
       throw new Error("You must create an account or sign in to publish a story.");
     }
 
-    const id = "story-" + Date.now();
-    const slugBase = storyData.title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)+/g, "");
-    const slug = `${slugBase || "untitled"}-${Math.floor(100 + Math.random() * 900)}`;
-
-    const newStory: StoryItem = {
-      ...storyData,
-      id,
-      slug,
-      viewCount: 1,
-      authorId: currentUser.id,
-      authorPenName: storyData.isGhostMode
-        ? storyData.ghostAlias || "Nameless Scribe"
-        : currentUser.penName,
-      authorAvatarIcon: storyData.isGhostMode ? "mask" : currentUser.avatarIcon,
-      authorAvatarColor: storyData.isGhostMode ? "slate" : currentUser.avatarColor,
-      authorBio: storyData.isGhostMode
-        ? "A temporary shadow passing through."
-        : currentUser.bio,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      reactions: {
-        FELT_THIS: 0,
-        VIRTUAL_HUG: 0,
-        INSPIRED: 0,
-        CATHARTIC: 0,
-        POETIC: 0,
-      },
-      commentsCount: 0,
-    };
-
-    // If Supabase is connected, write to Supabase
-    if (supabase) {
-      try {
-        await supabase.from("Story").insert({
-          id,
-          slug,
-          title: newStory.title,
-          excerpt: newStory.excerpt,
-          content: newStory.content,
-          mood: newStory.mood,
-          circleCategory: newStory.circleCategory,
-          tags: newStory.tags,
-          coverTheme: newStory.coverTheme,
-          readTimeMinutes: newStory.readTimeMinutes,
-          isDraft: newStory.isDraft,
-          isGhostMode: newStory.isGhostMode,
-          ghostAlias: newStory.ghostAlias || null,
-          authorId: currentUser.id,
-        });
-      } catch {}
+    const response = await fetch("/api/stories", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(storyData),
+    });
+    const result: unknown = await response.json();
+    if (!response.ok) {
+      const message =
+        result && typeof result === "object" && "error" in result &&
+        typeof result.error === "string"
+          ? result.error
+          : "Could not publish the story.";
+      throw new Error(message);
     }
-
+    const newStory = result as StoryItem;
     setStories((prev) => [newStory, ...prev]);
     return newStory;
   };
@@ -567,7 +484,7 @@ export function QuinspenProvider({ children }: { children: React.ReactNode }) {
     setStories((prev) => prev.filter((s) => s.id !== storyId));
   };
 
-  const toggleReaction = (storyId: string, reactionType: ReactionType) => {
+  const toggleReaction = async (storyId: string, reactionType: ReactionType) => {
     if (!currentUser) {
       openAuthModal("signup");
       return;
@@ -575,82 +492,63 @@ export function QuinspenProvider({ children }: { children: React.ReactNode }) {
 
     const currentList = userReactions[storyId] || [];
     const hasReacted = currentList.includes(reactionType);
-    const updatedList = hasReacted
-      ? currentList.filter((r) => r !== reactionType)
-      : [...currentList, reactionType];
-
-    setUserReactions((prev) => ({
-      ...prev,
-      [storyId]: updatedList,
-    }));
-
-    if (supabase) {
-      if (hasReacted) {
-        supabase
-          .from("Reaction")
-          .delete()
-          .match({ storyId, userId: currentUser.id, type: reactionType })
-          .then();
-      } else {
-        supabase
-          .from("Reaction")
-          .insert({ storyId, userId: currentUser.id, type: reactionType })
-          .then();
-      }
+    const response = await fetch(`/api/stories/${storyId}/reactions`, {
+      method: hasReacted ? "DELETE" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: reactionType }),
+    });
+    const result: unknown = await response.json();
+    if (!response.ok) {
+      const message =
+        result && typeof result === "object" && "error" in result &&
+        typeof result.error === "string"
+          ? result.error
+          : "Could not save your reaction.";
+      throw new Error(message);
     }
 
+    const reactionResult = result as {
+      counts: StoryItem["reactions"];
+      userReactions: ReactionType[];
+    };
+    setUserReactions((previous) => ({
+      ...previous,
+      [storyId]: reactionResult.userReactions,
+    }));
     setStories((prev) =>
-      prev.map((s) => {
-        if (s.id !== storyId) return s;
-        const countDiff = hasReacted ? -1 : 1;
-        return {
-          ...s,
-          reactions: {
-            ...s.reactions,
-            [reactionType]: Math.max(0, (s.reactions[reactionType] || 0) + countDiff),
-          },
-        };
-      })
+      prev.map((story) =>
+        story.id === storyId
+          ? { ...story, reactions: reactionResult.counts }
+          : story
+      )
     );
   };
 
-  const addComment = (storyId: string, content: string): StoryComment => {
+  const addComment = async (storyId: string, content: string): Promise<StoryComment> => {
     if (!currentUser) {
       openAuthModal("signup");
       throw new Error("Please create an account to leave a reflection.");
     }
 
-    const newComment: StoryComment = {
-      id: "comment-" + Date.now(),
-      storyId,
-      userId: currentUser.id,
-      content,
-      penNameSnapshot: currentUser.penName,
-      avatarIcon: currentUser.avatarIcon,
-      avatarColor: currentUser.avatarColor,
-      isAuthor: false,
-      createdAt: new Date().toISOString(),
-    };
-
-    if (supabase) {
-      supabase
-        .from("Comment")
-        .insert({
-          id: newComment.id,
-          storyId,
-          userId: currentUser.id,
-          content,
-          penNameSnapshot: currentUser.penName,
-          avatarIcon: currentUser.avatarIcon,
-          avatarColor: currentUser.avatarColor,
-        })
-        .then();
+    const response = await fetch(`/api/stories/${storyId}/comments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    });
+    const result: unknown = await response.json();
+    if (!response.ok) {
+      const message =
+        result && typeof result === "object" && "error" in result &&
+        typeof result.error === "string"
+          ? result.error
+          : "Could not post your reflection.";
+      throw new Error(message);
     }
+    const newComment = result as StoryComment;
 
     setStories((prev) =>
       prev.map((s) => {
         if (s.id === storyId) {
-          newComment.isAuthor = s.authorId === currentUser.id;
           return {
             ...s,
             commentsCount: s.commentsCount + 1,
@@ -846,6 +744,8 @@ export function QuinspenProvider({ children }: { children: React.ReactNode }) {
         currentUser,
         isLoggedIn: !!currentUser,
         isLoadingAuth,
+        isLoadingStories,
+        storiesError,
         stories,
         whispers,
         bookmarkedIds,

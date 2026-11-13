@@ -1,4 +1,7 @@
-import { CircleInfo, StoryItem, AnonymousPenIdentity, WhisperConnectionItem, AvailableListener } from "@/types/quinspen";
+import {
+  CircleInfo,
+  WhisperConnectionItem,
+} from "@/types/quinspen";
 
 export const STORY_CIRCLES: CircleInfo[] = [
   {
@@ -88,45 +91,4 @@ export function generateRandomPenName(): { penName: string; penTag: string } {
   };
 }
 
-// Zero automated / fake AI stories.
-// Only real stories created by actual signed-up users are displayed in the sanctuary.
-export const INITIAL_STORIES: StoryItem[] = [];
-
 export const INITIAL_WHISPERS: WhisperConnectionItem[] = [];
-
-// Available 1-on-1 Anonymous Listeners / Counselors for users needing support
-export const AVAILABLE_LISTENERS: AvailableListener[] = [
-  {
-    id: "listener-1",
-    name: "Dr. Elena (Anonymous Clinical Scribe)",
-    role: "Mindful Therapist & Clinical Listener",
-    badge: "Verified Therapist",
-    avatarIcon: "sparkle",
-    avatarColor: "indigo",
-    specialties: ["Anxiety & Overwhelm", "Burnout", "Deep Life Transitions"],
-    intro: "Here to provide a tranquil, non-judgmental container where you can lay down burdens without being analyzed or condemned.",
-    isAvailable: true,
-  },
-  {
-    id: "listener-2",
-    name: "Rowan (Compassionate Peer Guide)",
-    role: "Grief & Heartbreak Support",
-    badge: "Active Listener",
-    avatarIcon: "feather",
-    avatarColor: "amber",
-    specialties: ["Unspoken Grief", "Relationship Heartache", "Loneliness"],
-    intro: "Sometimes you just need someone to sit in the quiet with you. Whatever you are carrying, you don't have to carry it by yourself.",
-    isAvailable: true,
-  },
-  {
-    id: "listener-3",
-    name: "Serene Haven Guide",
-    role: "Late-Night Emotional Venting",
-    badge: "Available Now",
-    avatarIcon: "moon",
-    avatarColor: "violet",
-    specialties: ["Late-Night Musings", "Silent Guilt", "Venting Space"],
-    intro: "A dedicated safe space when the rest of the world is asleep. Speak freely without worrying about consequences.",
-    isAvailable: true,
-  },
-];
