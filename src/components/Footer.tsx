@@ -91,7 +91,7 @@ export function Footer() {
         <p className="flex items-center space-x-1 mt-2 sm:mt-0">
           <span>Crafted with</span>
           <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500 mx-1 inline" />
-          <span>for human vulnerability. Built on Next.js & Supabase.</span>
+          <span>for human vulnerability. Built with Next.js, Clerk & Supabase.</span>
         </p>
       </div>
     </footer>

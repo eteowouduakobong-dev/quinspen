@@ -1,93 +1,120 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { INITIAL_WHISPERS } from "@/lib/quinspenData";
+import { authErrorStatus, getAuthenticatedUser } from "@/lib/requestAuth";
+import { toWhisperItem, WHISPER_INCLUDE } from "@/lib/whisperDto";
 
-export async function GET(request: Request) {
+export async function GET() {
+  const auth = await getAuthenticatedUser();
+  if (!auth.user) {
+    return NextResponse.json(
+      { error: "Sign in to view your whispers." },
+      { status: authErrorStatus(auth.error) }
+    );
+  }
+
   try {
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get("userId");
+    const connections = await prisma.whisperConnection.findMany({
+      where: {
+        OR: [
+          { initiatorId: auth.profile.id },
+          { recipientId: auth.profile.id },
+        ],
+      },
+      include: WHISPER_INCLUDE,
+      orderBy: { updatedAt: "desc" },
+    });
 
-    if (process.env.DATABASE_URL && userId) {
-      const connections = await prisma.whisperConnection.findMany({
-        where: {
-          OR: [{ initiatorId: userId }, { recipientId: userId }],
-        },
-        include: {
-          initiator: {
-            select: { penName: true, avatarIcon: true, avatarColor: true },
-          },
-          recipient: {
-            select: { penName: true, avatarIcon: true, avatarColor: true },
-          },
-          messages: {
-            orderBy: { createdAt: "asc" },
-          },
-        },
-        orderBy: { updatedAt: "desc" },
-      });
-
-      if (connections && connections.length > 0) {
-        return NextResponse.json(connections);
-      }
-    }
-
-    return NextResponse.json(INITIAL_WHISPERS);
+    return NextResponse.json(
+      connections.map((connection) => toWhisperItem(connection, auth.profile.id))
+    );
   } catch (error) {
     console.error("Failed to fetch whispers:", error);
-    return NextResponse.json(INITIAL_WHISPERS);
+    return NextResponse.json(
+      { error: "Could not load your whispers." },
+      { status: 500 }
+    );
   }
 }
 
 export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const { storyId, initiatorId, recipientId, initialNote } = body;
+  const auth = await getAuthenticatedUser();
+  if (!auth.user) {
+    return NextResponse.json(
+      { error: "Sign in before sending a whisper." },
+      { status: authErrorStatus(auth.error) }
+    );
+  }
 
-    if (!initiatorId || !recipientId || !initialNote) {
+  try {
+    const body: unknown = await request.json();
+    const data = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+    const { storyId, initialNote } = data;
+    if (
+      typeof storyId !== "string" ||
+      typeof initialNote !== "string" ||
+      !initialNote.trim() ||
+      initialNote.trim().length > 4000
+    ) {
       return NextResponse.json(
-        { error: "Missing required parameters for whisper connection." },
+        { error: "A story and a whisper of up to 4,000 characters are required." },
         { status: 400 }
       );
     }
 
-    if (process.env.DATABASE_URL) {
-      const connection = await prisma.whisperConnection.create({
-        data: {
-          storyId: storyId || null,
-          initiatorId,
-          recipientId,
-          initialNote,
-          status: "PENDING",
-          messages: {
-            create: {
-              senderId: initiatorId,
-              content: initialNote,
-            },
-          },
-        },
-        include: {
-          messages: true,
-        },
-      });
-      return NextResponse.json(connection, { status: 201 });
+    const story = await prisma.story.findFirst({
+      where: { id: storyId, isDraft: false },
+      select: { id: true, authorId: true },
+    });
+    if (!story) {
+      return NextResponse.json({ error: "Story not found." }, { status: 404 });
+    }
+    if (story.authorId === auth.profile.id) {
+      return NextResponse.json(
+        { error: "You cannot whisper to your own story." },
+        { status: 400 }
+      );
     }
 
-    return NextResponse.json(
-      {
-        id: "whisper-conn-" + Date.now(),
+    const existing = await prisma.whisperConnection.findFirst({
+      where: {
         storyId,
-        initiatorId,
-        recipientId,
-        initialNote,
-        status: "PENDING",
-        createdAt: new Date().toISOString(),
+        initiatorId: auth.profile.id,
+        recipientId: story.authorId,
+        status: { in: ["PENDING", "ACCEPTED"] },
       },
-      { status: 201 }
-    );
+      select: { id: true },
+    });
+    if (existing) {
+      return NextResponse.json(
+        { error: "You already have an open whisper conversation for this story." },
+        { status: 409 }
+      );
+    }
+
+    const connection = await prisma.whisperConnection.create({
+      data: {
+        storyId,
+        initiatorId: auth.profile.id,
+        recipientId: story.authorId,
+        initialNote: initialNote.trim(),
+        status: "PENDING",
+        messages: {
+          create: {
+            senderId: auth.profile.id,
+            content: initialNote.trim(),
+          },
+        },
+      },
+      include: WHISPER_INCLUDE,
+    });
+
+    return NextResponse.json(toWhisperItem(connection, auth.profile.id), {
+      status: 201,
+    });
   } catch (error) {
     console.error("Failed to create whisper:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Could not send your whisper." },
       { status: 500 }
     );
   }

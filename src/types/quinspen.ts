@@ -80,6 +80,7 @@ export interface StoryItem {
   ghostAlias?: string;
   viewCount: number;
   authorId: string;
+  isOwner: boolean;
   authorPenName: string;
   authorAvatarIcon: string;
   authorAvatarColor: string;

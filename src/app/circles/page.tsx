@@ -97,7 +97,7 @@ export default function CirclesPage() {
                     className="text-xs font-medium italic mb-3"
                     style={{ color: circle.accentColor }}
                   >
-                    "{circle.tagline}"
+                    &ldquo;{circle.tagline}&rdquo;
                   </p>
 
                   <p className="text-xs text-stone-400 leading-relaxed">

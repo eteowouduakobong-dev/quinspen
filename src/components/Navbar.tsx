@@ -208,7 +208,7 @@ export function Navbar() {
                         @{currentUser.penTag}
                       </p>
                       <p className="text-[11px] text-stone-400 italic mt-1 line-clamp-1">
-                        "{currentUser.bio || "Untold reflections"}"
+                        &ldquo;{currentUser.bio || "Untold reflections"}&rdquo;
                       </p>
                     </div>
 

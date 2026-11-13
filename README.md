@@ -10,7 +10,7 @@
 
 ### 1. 🛡️ 100% Identity Shield & Pen Identities
 - **Anonymous Pen Names**: Every account is granted an evocative anonymous persona (e.g., *Midnight Scribe*, *Florentine Ghost*, *Raindrop Scribe*) with a randomizer button.
-- **Strict Privacy Controls**: Real emails stay in the account profile, which row-level security restricts to its owner. Story and reflection APIs expose pen names, not email addresses.
+- **Strict Privacy Controls**: Real emails stay in the account profile. The Clerk-authenticated server maps them to anonymous profiles; public APIs expose pen names, not email addresses.
 - **Total Ghost Mode**: Writers can detach even their account pen name for specific posts, publishing under a transient alias (e.g. *Nameless Scribe*).
 
 ### 2. 🌌 Thematic Story Circles
@@ -48,20 +48,21 @@ Maintains a full, organized record of each user's contributions:
 Built-in procedural soundscapes (Gentle Rain, Midnight Fireplace, Night Wind) generated with the Web Audio API without requiring bulky external audio downloads.
 
 ### 7. 🤝 Real Human Listener Sessions
-- Stories, reactions, and reflections are stored in the shared database and require a verified Supabase account.
+- Stories, reactions, and reflections are stored in the shared database and require a verified Clerk account.
 - Safe Haven creates a private, persisted conversation request. It does not generate automated or simulated replies.
 - Authorized human staff accept waiting requests and answer from `/listener-inbox`. Public conversation views use pen names and do not expose account email addresses.
-- Staff access is controlled by the server-only `LISTENER_STAFF_EMAILS` environment variable. Add the exact, verified Supabase Auth emails for the people who will handle sessions.
+- Staff access is controlled by Clerk public metadata. Set `publicMetadata.role` to `"listener"` on staff accounts.
 - A waiting request is not a promise of an immediate response. Continuous availability requires real staff coverage; this chat is not emergency or clinical care.
 
-For an existing database, run `npx prisma db push` to add the listener tables, then apply the updated `supabase/schema.sql` in the Supabase SQL Editor to enable the profile and private-listener row-level security rules. The SQL script is safe to re-run.
+For an existing database, run `npx prisma db push` to add the `clerkId` column and listener tables, then apply the updated `supabase/schema.sql` in the Supabase SQL Editor. The SQL script is safe to re-run.
 
 ---
 
 ## 🛠️ Tech Stack
 
 - **Framework**: [Next.js](https://nextjs.org/) (App Router, React 19, Server & Client Components)
-- **Database & Auth**: [Supabase](https://supabase.com/) (PostgreSQL & Secure Auth)
+- **Database**: [Supabase](https://supabase.com/) (PostgreSQL)
+- **Authentication**: [Clerk](https://clerk.com/) (server-side session verification)
 - **ORM**: [Prisma](https://www.prisma.io/) (Type-safe client & schema)
 - **Styling**: [Tailwind CSS v4](https://tailwindcss.com/)
 - **Icons**: [Lucide React](https://lucide.dev/)
@@ -74,27 +75,35 @@ For an existing database, run `npx prisma db push` to add the listener tables, t
 ### 1. Clone & Install Dependencies
 ```bash
 git clone <repo-url>
-cd gitclass
+cd quinspen
 npm install
 ```
 
 ### 2. Configure Environment Variables
-Copy `.env.example` to `.env`:
+Copy `.env.example` to `.env.local`:
 ```bash
-cp .env.example .env
+cp .env.example .env.local
 ```
-Populate the Supabase and Prisma connection strings:
+Populate the Clerk keys, webhook secret, and Prisma connection strings:
 ```env
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-LISTENER_STAFF_EMAILS=listener@example.com
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_your-publishable-key
+CLERK_SECRET_KEY=sk_test_your-secret-key
+CLERK_WEBHOOK_SIGNING_SECRET=whsec_your-webhook-signing-secret
 DATABASE_URL="postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres?pgbouncer=true"
 DIRECT_URL="postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres"
 ```
 
-The app requires Supabase Auth and a configured PostgreSQL database for account registration, community stories, and listener sessions. It does not create local demo accounts or sample stories.
+The app requires Clerk authentication and a configured PostgreSQL database for account registration, community stories, and listener sessions. It does not create local demo accounts or sample stories.
 
-### 3. Generate Prisma Client & Push Schema
+### 3. Configure Clerk
+
+For local development without a Clerk account, run `npx clerk@latest init --accountless` to write temporary development keys to `.env.local`.
+
+1. Create a Clerk application and copy the publishable and secret keys into `.env.local`.
+2. Add a webhook endpoint pointing to `https://your-domain.com/api/webhooks/clerk` for `user.created`, `user.updated`, and `user.deleted`, then copy its signing secret into `CLERK_WEBHOOK_SIGNING_SECRET`.
+3. For listener staff, set `publicMetadata.role` to `"listener"` on the staff member's Clerk user.
+
+### 4. Generate Prisma Client & Push Schema
 ```bash
 npx prisma generate
 npx prisma db push
@@ -102,7 +111,7 @@ npx prisma db push
 
 Alternatively, run the SQL script in `supabase/schema.sql` inside the Supabase SQL Editor.
 
-### 4. Run Development Server
+### 5. Run Development Server
 ```bash
 npm run dev
 ```
@@ -114,13 +123,13 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 1. Push your code to GitHub.
 2. Import the repository into your [Vercel Dashboard](https://vercel.com/).
-3. Add the environment variables from your `.env` file into Vercel Settings -> Environment Variables.
+3. Add the environment variables from your local `.env.local` into Vercel Settings -> Environment Variables.
 4. Click **Deploy**. Vercel will automatically run `prisma generate && next build` as defined in `vercel.json`.
 
 ---
 
 ## 🔒 Anonymity & Security
 
-- User email addresses are kept private for authentication and personal chronicle access only.
+- User email addresses are kept private for Clerk authentication and personal chronicle access only.
 - All public storytelling feeds, comments, and 1-on-1 whispers operate strictly via anonymized Pen Names (`penName` & `penTag`).
 - No personally identifiable information (PII) is exposed through public API endpoints.

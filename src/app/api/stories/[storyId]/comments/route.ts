@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import {
-  authErrorStatus,
-  ensureDatabaseProfile,
-  getAuthenticatedUser,
-} from "@/lib/requestAuth";
+import { authErrorStatus, getAuthenticatedUser } from "@/lib/requestAuth";
 
 type RouteContext = { params: Promise<{ storyId: string }> };
 
@@ -95,11 +91,11 @@ export async function POST(request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: "Story not found." }, { status: 404 });
     }
 
-    const profile = await ensureDatabaseProfile(auth.user);
+    const profile = auth.profile;
     const comment = await prisma.comment.create({
       data: {
         storyId,
-        userId: auth.user.id,
+        userId: profile.id,
         content: content.trim(),
         penNameSnapshot: profile.penName,
         avatarIcon: profile.avatarIcon,

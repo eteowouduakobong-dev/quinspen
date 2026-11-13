@@ -105,7 +105,7 @@ export default function WriteStoryPage() {
             Sign In to Story Studio
           </h2>
           <p className="text-xs text-stone-400 mb-6 leading-relaxed">
-            To publish anonymous stories and maintain records of your work in Supabase, please create an account or sign in with your email.
+            To publish anonymous stories and maintain records of your work securely, please create an account or sign in with your email.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <button

@@ -10,9 +10,7 @@ import {
   Check,
   X,
   Compass,
-  Sparkles,
   Lock,
-  ArrowRight,
   BookOpen,
 } from "lucide-react";
 import { useQuinspen } from "@/context/QuinspenContext";
@@ -33,6 +31,7 @@ export default function WhispersPage() {
   );
   const [replyText, setReplyText] = useState("");
   const [filterTab, setFilterTab] = useState<"all" | "pending" | "active">("all");
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const currentUserId = currentUser?.id || "user-quinspen-demo";
 
@@ -43,19 +42,46 @@ export default function WhispersPage() {
     return true;
   });
 
-  const activeConnection = whispers.find((w) => w.id === activeConnectionId);
+  const activeConnection =
+    whispers.find((w) => w.id === activeConnectionId) ?? whispers[0];
 
   // Mark active connection as read
   const handleSelectConnection = (conn: WhisperConnectionItem) => {
     setActiveConnectionId(conn.id);
-    markWhisperAsRead(conn.id);
+    setActionError(null);
+    void markWhisperAsRead(conn.id).catch((error: unknown) => {
+      setActionError(
+        error instanceof Error ? error.message : "Could not mark this whisper as read."
+      );
+    });
   };
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!replyText.trim() || !activeConnection) return;
-    sendWhisperMessage(activeConnection.id, replyText.trim());
-    setReplyText("");
+    setActionError(null);
+    try {
+      await sendWhisperMessage(activeConnection.id, replyText.trim());
+      setReplyText("");
+    } catch (error) {
+      setActionError(
+        error instanceof Error ? error.message : "Could not send your whisper."
+      );
+    }
+  };
+
+  const handleRespond = async (
+    connectionId: string,
+    status: "ACCEPTED" | "DECLINED"
+  ) => {
+    setActionError(null);
+    try {
+      await respondToWhisper(connectionId, status);
+    } catch (error) {
+      setActionError(
+        error instanceof Error ? error.message : "Could not update this whisper."
+      );
+    }
   };
 
   const handleInsertPrompt = (prompt: string) => {
@@ -139,6 +165,11 @@ export default function WhispersPage() {
         </div>
 
         {/* Main Split Layout */}
+        {actionError && (
+          <div className="mb-4 rounded-xl border border-rose-800/60 bg-rose-950/30 p-3 text-xs text-rose-200">
+            {actionError}
+          </div>
+        )}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[600px]">
           {/* Left Column: Whispers List */}
           <div className="lg:col-span-4 rounded-2xl bg-stone-900/80 border border-stone-800 flex flex-col overflow-hidden">
@@ -230,7 +261,7 @@ export default function WhispersPage() {
                       {/* Story anchor title */}
                       {conn.storyTitle && (
                         <p className="text-[11px] text-stone-400 font-serif italic line-clamp-1 mb-1">
-                          Re: "{conn.storyTitle}"
+                          Re: &ldquo;{conn.storyTitle}&rdquo;
                         </p>
                       )}
 
@@ -244,7 +275,7 @@ export default function WhispersPage() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              respondToWhisper(conn.id, "ACCEPTED");
+                              void handleRespond(conn.id, "ACCEPTED");
                             }}
                             className="flex-1 flex items-center justify-center space-x-1 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 text-xs font-semibold"
                           >
@@ -254,7 +285,7 @@ export default function WhispersPage() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              respondToWhisper(conn.id, "DECLINED");
+                              void handleRespond(conn.id, "DECLINED");
                             }}
                             className="flex-1 flex items-center justify-center space-x-1 py-1 rounded-lg bg-stone-800 text-stone-400 hover:bg-stone-700 text-xs font-semibold"
                           >
@@ -299,7 +330,7 @@ export default function WhispersPage() {
                           <BookOpen className="w-3 h-3 text-amber-400 inline" />
                           <span>Connected through: </span>
                           <span className="font-serif italic text-stone-300">
-                            "{activeConnection.storyTitle}"
+                            &ldquo;{activeConnection.storyTitle}&rdquo;
                           </span>
                         </p>
                       )}
@@ -368,7 +399,7 @@ export default function WhispersPage() {
                       }
                       className="px-2.5 py-1 rounded-lg bg-stone-900 border border-stone-800 text-stone-400 hover:text-amber-300 hover:border-amber-500/30 whitespace-nowrap transition-colors"
                     >
-                      "Thank you for your vulnerability..."
+                      &ldquo;Thank you for your vulnerability...&rdquo;
                     </button>
                     <button
                       type="button"
@@ -379,7 +410,7 @@ export default function WhispersPage() {
                       }
                       className="px-2.5 py-1 rounded-lg bg-stone-900 border border-stone-800 text-stone-400 hover:text-amber-300 hover:border-amber-500/30 whitespace-nowrap transition-colors"
                     >
-                      "What gave you the strength?"
+                      &ldquo;What gave you the strength?&rdquo;
                     </button>
                     <button
                       type="button"
@@ -390,7 +421,7 @@ export default function WhispersPage() {
                       }
                       className="px-2.5 py-1 rounded-lg bg-stone-900 border border-stone-800 text-stone-400 hover:text-amber-300 hover:border-amber-500/30 whitespace-nowrap transition-colors"
                     >
-                      "I experienced something similar..."
+                      &ldquo;I experienced something similar...&rdquo;
                     </button>
                   </div>
 

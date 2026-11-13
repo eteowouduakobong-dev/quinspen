@@ -1,7 +1,4 @@
-import {
-  CircleInfo,
-  WhisperConnectionItem,
-} from "@/types/quinspen";
+import { CircleInfo } from "@/types/quinspen";
 
 export const STORY_CIRCLES: CircleInfo[] = [
   {
@@ -84,11 +81,9 @@ export const PEN_NAME_NOUNS = [
 export function generateRandomPenName(): { penName: string; penTag: string } {
   const adj = PEN_NAME_ADJECTIVES[Math.floor(Math.random() * PEN_NAME_ADJECTIVES.length)];
   const noun = PEN_NAME_NOUNS[Math.floor(Math.random() * PEN_NAME_NOUNS.length)];
-  const num = Math.floor(100 + Math.random() * 900);
+  const num = Math.floor(100000 + Math.random() * 900000);
   return {
     penName: `${adj} ${noun}`,
     penTag: `scribe_${num}`,
   };
 }
-
-export const INITIAL_WHISPERS: WhisperConnectionItem[] = [];

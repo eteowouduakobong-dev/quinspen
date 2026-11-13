@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import {
-  authErrorStatus,
-  ensureDatabaseProfile,
-  getAuthenticatedUser,
-} from "@/lib/requestAuth";
+import { authErrorStatus, getAuthenticatedUser } from "@/lib/requestAuth";
 import { isReactionType } from "@/lib/storyDto";
 import { ReactionType } from "@/types/quinspen";
 
@@ -54,19 +50,19 @@ async function updateReaction(
       return NextResponse.json({ error: "Story not found." }, { status: 404 });
     }
 
-    await ensureDatabaseProfile(auth.user);
+    const userId = auth.profile.id;
     const uniqueKey = {
-      storyId_userId_type: { storyId, userId: auth.user.id, type },
+      storyId_userId_type: { storyId, userId, type },
     };
     if (shouldAdd) {
       await prisma.reaction.upsert({
         where: uniqueKey,
-        create: { storyId, userId: auth.user.id, type },
+        create: { storyId, userId, type },
         update: {},
       });
     } else {
       await prisma.reaction.deleteMany({
-        where: { storyId, userId: auth.user.id, type },
+        where: { storyId, userId, type },
       });
     }
 
@@ -77,7 +73,7 @@ async function updateReaction(
         _count: { _all: true },
       }),
       prisma.reaction.findMany({
-        where: { storyId, userId: auth.user.id },
+        where: { storyId, userId },
         select: { type: true },
       }),
     ]);

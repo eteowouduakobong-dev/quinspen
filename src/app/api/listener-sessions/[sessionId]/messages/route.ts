@@ -2,9 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   authErrorStatus,
-  ensureDatabaseProfile,
   getAuthenticatedUser,
-  isListenerStaff,
 } from "@/lib/requestAuth";
 
 type RouteContext = { params: Promise<{ sessionId: string }> };
@@ -52,11 +50,11 @@ export async function POST(request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: "Listener session not found." }, { status: 404 });
     }
 
-    const staffView = isListenerStaff(auth.user.email);
-    const isOwner = session.userId === auth.user.id;
+    const staffView = auth.isListener;
+    const isOwner = session.userId === auth.profile.id;
     if (
       (!isOwner &&
-        (!staffView || session.assignedStaffId !== auth.user.id)) ||
+        (!staffView || session.assignedStaffId !== auth.profile.id)) ||
       session.status === "CLOSED" ||
       (staffView && !isOwner && session.status !== "ACTIVE")
     ) {
@@ -66,15 +64,14 @@ export async function POST(request: Request, { params }: RouteContext) {
     let senderName = "Quinspen Human Listener";
     let senderRole = "STAFF";
     if (isOwner) {
-      const profile = await ensureDatabaseProfile(auth.user);
-      senderName = profile.penName;
+      senderName = auth.profile.penName;
       senderRole = "USER";
     }
 
     const message = await prisma.listenerMessage.create({
       data: {
         sessionId,
-        senderId: auth.user.id,
+        senderId: auth.profile.id,
         senderRole,
         senderName,
         content: content.trim(),

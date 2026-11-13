@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import {
   authErrorStatus,
   getAuthenticatedUser,
-  isListenerStaff,
 } from "@/lib/requestAuth";
 
 type RouteContext = { params: Promise<{ sessionId: string }> };
@@ -64,12 +63,12 @@ export async function GET(_request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: "Listener session not found." }, { status: 404 });
     }
 
-    const staffView = isListenerStaff(auth.user.email);
-    const ownsSession = session.userId === auth.user.id;
+    const staffView = auth.isListener;
+    const ownsSession = session.userId === auth.profile.id;
     if (
       !ownsSession &&
       (!staffView ||
-        (session.status === "ACTIVE" && session.assignedStaffId !== auth.user.id))
+        (session.status === "ACTIVE" && session.assignedStaffId !== auth.profile.id))
     ) {
       return NextResponse.json({ error: "Listener session not found." }, { status: 404 });
     }
@@ -116,15 +115,15 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: "Listener session not found." }, { status: 404 });
     }
 
-    const staffView = isListenerStaff(auth.user.email);
-    const ownsSession = session.userId === auth.user.id;
+    const staffView = auth.isListener;
+    const ownsSession = session.userId === auth.profile.id;
     if (status === "ACTIVE") {
       if (!staffView) {
         return NextResponse.json({ error: "Only listener staff can accept sessions." }, { status: 403 });
       }
       if (
         session.status !== "WAITING" &&
-        !(session.status === "ACTIVE" && session.assignedStaffId === auth.user.id)
+        !(session.status === "ACTIVE" && session.assignedStaffId === auth.profile.id)
       ) {
         return NextResponse.json(
           { error: "This session is already assigned to another listener." },
@@ -135,7 +134,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       if (session.status === "WAITING") {
         const claimed = await prisma.listenerSession.updateMany({
           where: { id: session.id, status: "WAITING" },
-          data: { status: "ACTIVE", assignedStaffId: auth.user.id },
+          data: { status: "ACTIVE", assignedStaffId: auth.profile.id },
         });
         if (claimed.count !== 1) {
           return NextResponse.json(
@@ -147,7 +146,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     } else {
       if (
         !ownsSession &&
-        (!staffView || session.assignedStaffId !== auth.user.id)
+        (!staffView || session.assignedStaffId !== auth.profile.id)
       ) {
         return NextResponse.json({ error: "Listener session not found." }, { status: 404 });
       }

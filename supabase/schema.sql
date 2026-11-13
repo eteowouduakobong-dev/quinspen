@@ -1,6 +1,6 @@
 -- =========================================================
 -- QUINSPEN - Anonymous Storytelling Platform Database Schema
--- Supabase PostgreSQL Schema & Auth Sync
+-- Supabase PostgreSQL Schema (Clerk-authenticated, server-only access)
 -- =========================================================
 
 -- Enable UUID extension
@@ -9,6 +9,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- 1. USERS & ANONYMOUS PEN PROFILES
 CREATE TABLE IF NOT EXISTS public."User" (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "clerkId" TEXT,
   email TEXT UNIQUE NOT NULL,
   "penName" TEXT NOT NULL,
   "penTag" TEXT UNIQUE NOT NULL,
@@ -19,20 +20,15 @@ CREATE TABLE IF NOT EXISTS public."User" (
   "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+ALTER TABLE public."User" ADD COLUMN IF NOT EXISTS "clerkId" TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_clerk_id
+  ON public."User"("clerkId")
+  WHERE "clerkId" IS NOT NULL;
+
 ALTER TABLE public."User" ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users can read their own pen profile" ON public."User";
-CREATE POLICY "Users can read their own pen profile"
-  ON public."User"
-  FOR SELECT
-  TO authenticated
-  USING (auth.uid() = id);
 DROP POLICY IF EXISTS "Users can update their own pen profile" ON public."User";
-CREATE POLICY "Users can update their own pen profile"
-  ON public."User"
-  FOR UPDATE
-  TO authenticated
-  USING (auth.uid() = id)
-  WITH CHECK (auth.uid() = id);
+REVOKE ALL ON TABLE public."User" FROM anon, authenticated;
 
 -- 2. STORIES
 CREATE TABLE IF NOT EXISTS public."Story" (
@@ -57,11 +53,7 @@ CREATE TABLE IF NOT EXISTS public."Story" (
 
 ALTER TABLE public."Story" ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users can delete their own stories" ON public."Story";
-CREATE POLICY "Users can delete their own stories"
-  ON public."Story"
-  FOR DELETE
-  TO authenticated
-  USING (auth.uid() = "authorId");
+REVOKE ALL ON TABLE public."Story" FROM anon, authenticated;
 
 -- 3. REACTIONS (Emotional Resonances)
 CREATE TABLE IF NOT EXISTS public."Reaction" (
@@ -99,6 +91,8 @@ CREATE TABLE IF NOT EXISTS public."Bookmark" (
   "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
   CONSTRAINT unique_user_story_bookmark UNIQUE ("storyId", "userId")
 );
+ALTER TABLE public."Bookmark" ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public."Bookmark" FROM anon, authenticated;
 
 -- 6. WHISPER CONNECTIONS (Anonymous 1-on-1 dialogue requests)
 CREATE TABLE IF NOT EXISTS public."WhisperConnection" (
@@ -111,6 +105,8 @@ CREATE TABLE IF NOT EXISTS public."WhisperConnection" (
   "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
   "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+ALTER TABLE public."WhisperConnection" ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public."WhisperConnection" FROM anon, authenticated;
 
 -- 7. WHISPER MESSAGES (Private encrypted-feel dialogue between masked pen names)
 CREATE TABLE IF NOT EXISTS public."WhisperMessage" (
@@ -121,6 +117,8 @@ CREATE TABLE IF NOT EXISTS public."WhisperMessage" (
   "isRead" BOOLEAN NOT NULL DEFAULT false,
   "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+ALTER TABLE public."WhisperMessage" ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public."WhisperMessage" FROM anon, authenticated;
 
 -- 8. PRIVATE HUMAN LISTENER SESSIONS
 CREATE TABLE IF NOT EXISTS public."ListenerSession" (
@@ -162,31 +160,12 @@ CREATE INDEX IF NOT EXISTS idx_listener_session_status_created ON public."Listen
 CREATE INDEX IF NOT EXISTS idx_listener_session_staff_status ON public."ListenerSession"("assignedStaffId", status);
 CREATE INDEX IF NOT EXISTS idx_listener_message_session_created ON public."ListenerMessage"("sessionId", "createdAt");
 
--- 9. AUTOMATIC SUPABASE AUTH SYNC TRIGGER
--- Automatically creates an anonymous pen profile when a user signs up via Supabase Auth
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS trigger AS $$
-BEGIN
-  INSERT INTO public."User" (id, email, "penName", "penTag", "avatarIcon", "avatarColor", bio)
-  VALUES (
-    new.id,
-    new.email,
-    COALESCE(new.raw_user_meta_data->>'penName', 'Anonymous Scribe'),
-    COALESCE(new.raw_user_meta_data->>'penTag', 'scribe_' || floor(random() * 900 + 100)::text),
-    COALESCE(new.raw_user_meta_data->>'avatarIcon', 'feather'),
-    COALESCE(new.raw_user_meta_data->>'avatarColor', 'amber'),
-    COALESCE(new.raw_user_meta_data->>'bio', 'A quiet traveler carrying untold memories.')
-  )
-  ON CONFLICT (id) DO UPDATE SET
-    email = EXCLUDED.email,
-    "penName" = COALESCE(EXCLUDED."penName", public."User"."penName"),
-    "updatedAt" = now();
-  RETURN new;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Trigger linking auth.users to public."User"
+-- 9. CLERK AUTH INTEGRATION
+-- Clerk authenticates users; the Next.js server maps them to public."User"
+-- via the nullable unique "clerkId" column using verified email addresses.
+-- No Supabase Auth trigger or browser-accessible database access is used.
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+DROP FUNCTION IF EXISTS public.handle_new_user();
+
+REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon, authenticated;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM anon, authenticated;

@@ -5,21 +5,16 @@ import Link from "next/link";
 import {
   BookMarked,
   Feather,
-  Sparkles,
   ShieldCheck,
   Eye,
   Trash2,
   Bookmark,
   HeartHandshake,
-  MessageCircle,
   Shuffle,
-  Clock,
-  ArrowRight,
   Settings,
   Check,
 } from "lucide-react";
 import { useQuinspen } from "@/context/QuinspenContext";
-import { StoryItem } from "@/types/quinspen";
 
 export default function MyChroniclePage() {
   const {
@@ -43,10 +38,8 @@ export default function MyChroniclePage() {
   const [editBio, setEditBio] = useState(currentUser?.bio || "");
   const [isSaved, setIsSaved] = useState(false);
 
-  const currentUserId = currentUser?.id || "user-quinspen-demo";
-
   // Stories authored by user
-  const myStories = stories.filter((s) => s.authorId === currentUserId);
+  const myStories = stories.filter((s) => s.isOwner);
 
   // Bookmarked stories
   const myBookmarkedStories = stories.filter((s) =>
@@ -130,7 +123,7 @@ export default function MyChroniclePage() {
                   </span>
                 </div>
                 <p className="text-xs sm:text-sm text-stone-400 italic mt-1 max-w-md">
-                  "{currentUser?.bio || "A quiet traveler carrying untold memories in ink."}"
+                  &ldquo;{currentUser?.bio || "A quiet traveler carrying untold memories in ink."}&rdquo;
                 </p>
                 <div className="flex items-center space-x-2 mt-2 text-[11px] text-stone-500">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
@@ -309,7 +302,7 @@ export default function MyChroniclePage() {
               <div className="py-16 text-center rounded-2xl bg-stone-900/40 border border-stone-800 p-8">
                 <Feather className="w-10 h-10 text-stone-600 mx-auto mb-3" />
                 <h3 className="font-serif text-lg font-bold text-stone-200 mb-1">
-                  You Haven't Penned Any Stories Yet
+                  You Haven&apos;t Penned Any Stories Yet
                 </h3>
                 <p className="text-xs text-stone-400 max-w-sm mx-auto mb-5">
                   Your voice deserves to be heard without fear of exposure. Write your first story into the sanctuary.

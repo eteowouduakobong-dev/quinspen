@@ -77,6 +77,7 @@ export function toStoryItem(
   }
 
   const isGhostMode = story.isGhostMode;
+  const isOwner = story.authorId === currentUserId;
 
   return {
     id: story.id,
@@ -97,7 +98,8 @@ export function toStoryItem(
     isGhostMode,
     ghostAlias: story.ghostAlias || undefined,
     viewCount: story.viewCount,
-    authorId: story.authorId,
+    authorId: isGhostMode && !isOwner ? "" : story.authorId,
+    isOwner,
     authorPenName: isGhostMode
       ? story.ghostAlias || "Nameless Scribe"
       : story.author.penName,

@@ -1,7 +1,14 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
-import type { User as SupabaseUser } from "@supabase/supabase-js";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
+import { useClerk, useUser } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
 import {
   AnonymousPenIdentity,
   StoryItem,
@@ -12,9 +19,7 @@ import {
   CircleSlug,
   MoodType,
 } from "@/types/quinspen";
-import { INITIAL_WHISPERS, generateRandomPenName } from "@/lib/quinspenData";
 import { ambientSound } from "@/lib/ambientSound";
-import { createClient } from "@/lib/supabase/client";
 
 interface QuinspenContextType {
   currentUser: AnonymousPenIdentity | null;
@@ -31,34 +36,19 @@ interface QuinspenContextType {
   searchQuery: string;
   ambientTrack: "none" | "rain" | "fire" | "wind";
   unreadWhispersCount: number;
-  isAuthModalOpen: boolean;
-  authModalMode: "signin" | "signup";
   isListenerModalOpen: boolean;
 
-  // Actions
   setSelectedCircle: (circle: CircleSlug | "all") => void;
   setSelectedMood: (mood: MoodType | "all") => void;
   setSearchQuery: (query: string) => void;
   setAmbientTrack: (track: "none" | "rain" | "fire" | "wind") => void;
   openAuthModal: (mode: "signin" | "signup") => void;
-  closeAuthModal: () => void;
   openListenerModal: () => void;
   closeListenerModal: () => void;
 
-  signUpWithEmail: (
-    email: string,
-    password: string,
-    penName: string,
-    bio?: string
-  ) => Promise<{ success: boolean; error?: string; confirmationRequired?: boolean }>;
-  signInWithEmail: (
-    email: string,
-    password: string
-  ) => Promise<{ success: boolean; error?: string }>;
   signOut: () => Promise<void>;
-
-  updatePenProfile: (updates: Partial<AnonymousPenIdentity>) => void;
-  generateNewPenIdentity: () => void;
+  updatePenProfile: (updates: Partial<AnonymousPenIdentity>) => Promise<void>;
+  generateNewPenIdentity: () => Promise<void>;
 
   publishStory: (
     story: Omit<
@@ -71,172 +61,154 @@ interface QuinspenContextType {
       | "createdAt"
       | "updatedAt"
       | "authorId"
+      | "isOwner"
       | "authorPenName"
       | "authorAvatarIcon"
       | "authorAvatarColor"
     >
   ) => Promise<StoryItem>;
-  deleteStory: (storyId: string) => void;
+  deleteStory: (storyId: string) => Promise<void>;
   toggleReaction: (storyId: string, reactionType: ReactionType) => Promise<void>;
   addComment: (storyId: string, content: string) => Promise<StoryComment>;
-  toggleBookmark: (storyId: string) => void;
+  toggleBookmark: (storyId: string) => Promise<void>;
 
   sendWhisperRequest: (
     storyId: string,
-    storyTitle: string,
-    recipientId: string,
     initialNote: string
-  ) => WhisperConnectionItem;
-  respondToWhisper: (connectionId: string, status: "ACCEPTED" | "DECLINED") => void;
-  sendWhisperMessage: (connectionId: string, content: string) => void;
-  markWhisperAsRead: (connectionId: string) => void;
+  ) => Promise<WhisperConnectionItem>;
+  respondToWhisper: (
+    connectionId: string,
+    status: "ACCEPTED" | "DECLINED"
+  ) => Promise<void>;
+  sendWhisperMessage: (
+    connectionId: string,
+    content: string
+  ) => Promise<WhisperMessageItem>;
+  markWhisperAsRead: (connectionId: string) => Promise<void>;
 }
 
 const QuinspenContext = createContext<QuinspenContextType | undefined>(undefined);
 
-const STORAGE_KEYS = {
-  WHISPERS: "quinspen_whispers_v2",
-  BOOKMARKS: "quinspen_bookmarks_v2",
-};
-
-function identityFromAuthUser(user: SupabaseUser): AnonymousPenIdentity {
-  const metadata = user.user_metadata || {};
-  return {
-    id: user.id,
-    email: user.email || "",
-    penName:
-      typeof metadata.penName === "string" ? metadata.penName : "Anonymous Scribe",
-    penTag:
-      typeof metadata.penTag === "string"
-        ? metadata.penTag
-        : `scribe_${user.id.slice(0, 8)}`,
-    avatarIcon: metadata.avatarIcon || "feather",
-    avatarColor: metadata.avatarColor || "amber",
-    bio: metadata.bio || "A traveler in the world of untold memories.",
-    createdAt: user.created_at,
-  };
+async function errorMessage(response: Response, fallback: string): Promise<string> {
+  const result: unknown = await response.json().catch(() => null);
+  if (
+    result &&
+    typeof result === "object" &&
+    "error" in result &&
+    typeof result.error === "string"
+  ) {
+    return result.error;
+  }
+  return fallback;
 }
 
 export function QuinspenProvider({ children }: { children: React.ReactNode }) {
-  const hasAuthConfig = Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
+  const router = useRouter();
+  const { user, isLoaded, isSignedIn } = useUser();
+  const { signOut: clerkSignOut } = useClerk();
+
   const [currentUser, setCurrentUser] = useState<AnonymousPenIdentity | null>(null);
-  const [isLoadingAuth, setIsLoadingAuth] = useState(hasAuthConfig);
-  const [isLoadingStories, setIsLoadingStories] = useState(hasAuthConfig);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [isLoadingStories, setIsLoadingStories] = useState(false);
   const [storiesError, setStoriesError] = useState<string | null>(null);
   const [stories, setStories] = useState<StoryItem[]>([]);
-  const [whispers, setWhispers] = useState<WhisperConnectionItem[]>(INITIAL_WHISPERS);
+  const [whispers, setWhispers] = useState<WhisperConnectionItem[]>([]);
   const [bookmarkedIds, setBookmarkedIds] = useState<string[]>([]);
-  const [userReactions, setUserReactions] = useState<{ [storyId: string]: ReactionType[] }>({});
+  const [userReactions, setUserReactions] = useState<{
+    [storyId: string]: ReactionType[];
+  }>({});
   const [selectedCircle, setSelectedCircle] = useState<CircleSlug | "all">("all");
   const [selectedMood, setSelectedMood] = useState<MoodType | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [ambientTrack, setAmbientTrackState] = useState<"none" | "rain" | "fire" | "wind">("none");
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [authModalMode, setAuthModalMode] = useState<"signin" | "signup">("signup");
+  const [ambientTrack, setAmbientTrackState] = useState<
+    "none" | "rain" | "fire" | "wind"
+  >("none");
   const [isListenerModalOpen, setIsListenerModalOpen] = useState(false);
-  const supabase = useMemo(() => createClient(), []);
-  const currentUserId = currentUser?.id;
 
-  // Initialize Auth & Supabase Session
+  const clearAccountState = useCallback(() => {
+    setCurrentUser(null);
+    setStories([]);
+    setWhispers([]);
+    setBookmarkedIds([]);
+    setUserReactions({});
+    setStoriesError(null);
+    setIsLoadingStories(false);
+  }, []);
+
+  const currentUserId = currentUser?.id;
+  const clerkUserId = user?.id;
+
   useEffect(() => {
-    if (!supabase) return;
+    if (!isLoaded) return;
 
     let active = true;
-    const updateAuthState = (user: SupabaseUser | null) => {
-      if (!active) return;
-      setCurrentUser(user ? identityFromAuthUser(user) : null);
-      setIsLoadingAuth(false);
-      setIsLoadingStories(Boolean(user));
-      setStoriesError(null);
-      if (!user) {
-        setStories([]);
-        setUserReactions({});
-      }
-    };
+    if (!isSignedIn || !clerkUserId) {
+      queueMicrotask(() => {
+        clearAccountState();
+        setIsLoadingAuth(false);
+      });
+      return;
+    }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        updateAuthState(session?.user || null);
-      }
-    );
-
-    void supabase.auth.getSession().then(({ data, error }) => {
-      if (error) console.error("Could not restore the Supabase session:", error);
-      updateAuthState(data.session?.user || null);
-    }).catch((error: unknown) => {
-      console.error("Could not restore the Supabase session:", error);
-      updateAuthState(null);
+    queueMicrotask(() => {
+      if (active) setIsLoadingAuth(true);
     });
+    void fetch("/api/profile", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(
+            await errorMessage(response, "Could not load your anonymous profile.")
+          );
+        }
+        return (await response.json()) as AnonymousPenIdentity;
+      })
+      .then((profile) => {
+        if (!active) return;
+        setCurrentUser(profile);
+        setStoriesError(null);
+      })
+      .catch((error: unknown) => {
+        console.error("Could not load the Clerk-linked profile:", error);
+        if (!active) return;
+        setCurrentUser(null);
+        setStoriesError(
+          error instanceof Error ? error.message : "Could not load your profile."
+        );
+      })
+      .finally(() => {
+        if (active) setIsLoadingAuth(false);
+      });
 
     return () => {
       active = false;
-      subscription.unsubscribe();
     };
-  }, [supabase]);
+  }, [isLoaded, isSignedIn, clerkUserId, clearAccountState]);
 
   useEffect(() => {
-    try {
-      for (const key of [
-        "quinspen_user_identity_v2",
-        "quinspen_registered_accounts_v2",
-        "quinspen_stories_catalog_v2",
-        "quinspen_reactions_v2",
-      ]) {
-        localStorage.removeItem(key);
-      }
-      const savedWhispers = localStorage.getItem(STORAGE_KEYS.WHISPERS);
-      const savedBookmarks = localStorage.getItem(STORAGE_KEYS.BOOKMARKS);
-      const parsedWhispers: unknown = savedWhispers ? JSON.parse(savedWhispers) : null;
-      const parsedBookmarks: unknown = savedBookmarks ? JSON.parse(savedBookmarks) : null;
+    if (!currentUserId) {
       queueMicrotask(() => {
-        if (Array.isArray(parsedWhispers)) {
-          setWhispers(parsedWhispers as WhisperConnectionItem[]);
-        }
-        if (
-          Array.isArray(parsedBookmarks) &&
-          parsedBookmarks.every((bookmark) => typeof bookmark === "string")
-        ) {
-          setBookmarkedIds(parsedBookmarks);
-        }
+        setStories([]);
+        setWhispers([]);
+        setBookmarkedIds([]);
+        setUserReactions({});
+        setIsLoadingStories(false);
       });
-    } catch (error) {
-      console.error("Could not restore local preferences:", error);
+      return;
     }
-  }, []);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.WHISPERS, JSON.stringify(whispers));
-    } catch (error) {
-      console.error("Could not save local whispers:", error);
-    }
-  }, [whispers]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.BOOKMARKS, JSON.stringify(bookmarkedIds));
-    } catch (error) {
-      console.error("Could not save local bookmarks:", error);
-    }
-  }, [bookmarkedIds]);
-
-  useEffect(() => {
-    if (!currentUserId) return;
 
     let active = true;
+    queueMicrotask(() => {
+      if (active) setIsLoadingStories(true);
+    });
+
     void fetch("/api/stories", { cache: "no-store" })
       .then(async (response) => {
-        const result: unknown = await response.json();
         if (!response.ok) {
-          const message =
-            result && typeof result === "object" && "error" in result &&
-            typeof result.error === "string"
-              ? result.error
-              : "Could not load community stories.";
-          throw new Error(message);
+          throw new Error(
+            await errorMessage(response, "Could not load community stories.")
+          );
         }
+        const result: unknown = await response.json();
         if (!Array.isArray(result)) {
           throw new Error("The story service returned an invalid response.");
         }
@@ -245,7 +217,7 @@ export function QuinspenProvider({ children }: { children: React.ReactNode }) {
       .then((loadedStories) => {
         if (!active) return;
         setStories(loadedStories);
-        setIsLoadingStories(false);
+        setStoriesError(null);
         setUserReactions(
           Object.fromEntries(
             loadedStories.map((story) => [
@@ -259,13 +231,49 @@ export function QuinspenProvider({ children }: { children: React.ReactNode }) {
       })
       .catch((error: unknown) => {
         console.error("Could not load community stories:", error);
-        if (active) {
-          setStories([]);
-          setIsLoadingStories(false);
-          setStoriesError(
-            error instanceof Error ? error.message : "Could not load community stories."
-          );
+        if (!active) return;
+        setStories([]);
+        setStoriesError(
+          error instanceof Error ? error.message : "Could not load community stories."
+        );
+      })
+      .finally(() => {
+        if (active) setIsLoadingStories(false);
+      });
+
+    void fetch("/api/bookmarks", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(await errorMessage(response, "Could not load bookmarks."));
         }
+        return (await response.json()) as { storyIds?: unknown };
+      })
+      .then((result) => {
+        if (!active || !Array.isArray(result.storyIds)) return;
+        setBookmarkedIds(
+          result.storyIds.filter((id): id is string => typeof id === "string")
+        );
+      })
+      .catch((error: unknown) => {
+        console.error("Could not load bookmarks:", error);
+      });
+
+    void fetch("/api/whispers", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(await errorMessage(response, "Could not load whispers."));
+        }
+        const result: unknown = await response.json();
+        if (!Array.isArray(result)) {
+          throw new Error("The whisper service returned an invalid response.");
+        }
+        return result as WhisperConnectionItem[];
+      })
+      .then((loadedWhispers) => {
+        if (active) setWhispers(loadedWhispers);
+      })
+      .catch((error: unknown) => {
+        console.error("Could not load whispers:", error);
       });
 
     return () => {
@@ -273,170 +281,74 @@ export function QuinspenProvider({ children }: { children: React.ReactNode }) {
     };
   }, [currentUserId]);
 
-  // Ambient sound controller
   const setAmbientTrack = (track: "none" | "rain" | "fire" | "wind") => {
     setAmbientTrackState(track);
     ambientSound.play(track);
   };
 
   const openAuthModal = (mode: "signin" | "signup") => {
-    setAuthModalMode(mode);
-    setIsAuthModalOpen(true);
-  };
-
-  const closeAuthModal = () => {
-    setIsAuthModalOpen(false);
+    router.push(mode === "signup" ? "/sign-up" : "/sign-in");
   };
 
   const openListenerModal = () => setIsListenerModalOpen(true);
   const closeListenerModal = () => setIsListenerModalOpen(false);
 
-  // Sign Up with Email primarily
-  const signUpWithEmail = async (
-    email: string,
-    password: string,
-    penName: string,
-    bio?: string
-  ): Promise<{ success: boolean; error?: string; confirmationRequired?: boolean }> => {
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanPenName = penName.trim() || generateRandomPenName().penName;
-    const penTag = `scribe_${Math.floor(100 + Math.random() * 900)}`;
-
-    try {
-      if (!supabase) {
-        return {
-          success: false,
-          error: "Account services are not configured. Please contact the site administrator.",
-        };
-      }
-
-      const { data, error } = await supabase.auth.signUp({
-        email: cleanEmail,
-        password,
-        options: {
-          data: {
-            penName: cleanPenName,
-            penTag,
-            avatarIcon: "feather",
-            avatarColor: "amber",
-            bio: bio || "A traveler in the world of untold memories.",
-          },
-        },
-      });
-
-      if (error) {
-        return { success: false, error: error.message };
-      }
-
-      if (!data.user) {
-        return { success: false, error: "Account creation did not return a user." };
-      }
-
-      if (!data.session) {
-        return { success: true, confirmationRequired: true };
-      }
-
-      setCurrentUser(identityFromAuthUser(data.user));
-      setIsLoadingStories(true);
-      setIsAuthModalOpen(false);
-      return { success: true };
-    } catch (err: unknown) {
-      return {
-        success: false,
-        error: err instanceof Error ? err.message : "Failed to create account.",
-      };
-    }
-  };
-
-  // Sign In with Email
-  const signInWithEmail = async (
-    email: string,
-    password: string
-  ): Promise<{ success: boolean; error?: string }> => {
-    const cleanEmail = email.trim().toLowerCase();
-
-    try {
-      if (!supabase) {
-        return {
-          success: false,
-          error: "Account services are not configured. Please contact the site administrator.",
-        };
-      }
-
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password,
-      });
-
-      if (error) {
-        return { success: false, error: error.message };
-      }
-
-      if (!data.user || !data.session) {
-        return { success: false, error: "Sign in did not establish an active session." };
-      }
-
-      setCurrentUser(identityFromAuthUser(data.user));
-      setIsLoadingStories(true);
-      setIsAuthModalOpen(false);
-      return { success: true };
-    } catch (err: unknown) {
-      return {
-        success: false,
-        error: err instanceof Error ? err.message : "Sign in failed.",
-      };
-    }
-  };
-
-  // Sign Out
   const signOut = async () => {
-    if (!supabase) {
-      throw new Error("Account services are not configured.");
-    }
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-    setCurrentUser(null);
-    setStories([]);
-    setUserReactions({});
-    setIsLoadingStories(false);
+    clearAccountState();
+    setIsLoadingAuth(false);
+    await clerkSignOut({ redirectUrl: "/" });
   };
 
-  const updatePenProfile = (updates: Partial<AnonymousPenIdentity>) => {
-    if (!currentUser) return;
-    const updated = { ...currentUser, ...updates };
-    setCurrentUser(updated);
-
-    if (supabase) {
-      supabase.from("User").update(updates).eq("id", currentUser.id).then();
-    }
-
-    // Update authorPenName on their existing stories
-    setStories((prev) =>
-      prev.map((s) => {
-        if (s.authorId === currentUser.id) {
-          return {
-            ...s,
-            authorPenName: updated.penName,
-            authorAvatarIcon: updated.avatarIcon,
-            authorAvatarColor: updated.avatarColor,
-            authorBio: updated.bio,
-          };
-        }
-        return s;
-      })
+  const applyProfile = (profile: AnonymousPenIdentity) => {
+    setCurrentUser(profile);
+    setStories((previous) =>
+      previous.map((story) =>
+        story.isOwner
+          ? {
+              ...story,
+              authorPenName: profile.penName,
+              authorAvatarIcon: profile.avatarIcon,
+              authorAvatarColor: profile.avatarColor,
+              authorBio: profile.bio,
+            }
+          : story
+      )
     );
   };
 
-  const generateNewPenIdentity = () => {
+  const updatePenProfile = async (updates: Partial<AnonymousPenIdentity>) => {
     if (!currentUser) return;
-    const generated = generateRandomPenName();
-    updatePenProfile({
-      penName: generated.penName,
-      penTag: generated.penTag,
+    const payload: Record<string, string> = {};
+    if (typeof updates.penName === "string") payload.penName = updates.penName;
+    if (typeof updates.bio === "string") payload.bio = updates.bio;
+    if (typeof updates.avatarIcon === "string") payload.avatarIcon = updates.avatarIcon;
+    if (typeof updates.avatarColor === "string") payload.avatarColor = updates.avatarColor;
+    if (Object.keys(payload).length === 0) return;
+
+    const response = await fetch("/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     });
+    if (!response.ok) {
+      throw new Error(await errorMessage(response, "Could not update your profile."));
+    }
+    applyProfile((await response.json()) as AnonymousPenIdentity);
   };
 
-  // Stories
+  const generateNewPenIdentity = async () => {
+    if (!currentUser) return;
+    const response = await fetch("/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ regenerateIdentity: true }),
+    });
+    if (!response.ok) {
+      throw new Error(await errorMessage(response, "Could not generate a new identity."));
+    }
+    applyProfile((await response.json()) as AnonymousPenIdentity);
+  };
+
   const publishStory = async (
     storyData: Omit<
       StoryItem,
@@ -448,6 +360,7 @@ export function QuinspenProvider({ children }: { children: React.ReactNode }) {
       | "createdAt"
       | "updatedAt"
       | "authorId"
+      | "isOwner"
       | "authorPenName"
       | "authorAvatarIcon"
       | "authorAvatarColor"
@@ -463,25 +376,25 @@ export function QuinspenProvider({ children }: { children: React.ReactNode }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(storyData),
     });
-    const result: unknown = await response.json();
     if (!response.ok) {
-      const message =
-        result && typeof result === "object" && "error" in result &&
-        typeof result.error === "string"
-          ? result.error
-          : "Could not publish the story.";
-      throw new Error(message);
+      throw new Error(await errorMessage(response, "Could not publish the story."));
     }
-    const newStory = result as StoryItem;
-    setStories((prev) => [newStory, ...prev]);
+    const newStory = (await response.json()) as StoryItem;
+    setStories((previous) => [newStory, ...previous]);
     return newStory;
   };
 
-  const deleteStory = (storyId: string) => {
-    if (supabase) {
-      supabase.from("Story").delete().eq("id", storyId).then();
+  const deleteStory = async (storyId: string) => {
+    if (!currentUser) {
+      openAuthModal("signup");
+      return;
     }
-    setStories((prev) => prev.filter((s) => s.id !== storyId));
+    const response = await fetch(`/api/stories/${storyId}`, { method: "DELETE" });
+    if (!response.ok) {
+      throw new Error(await errorMessage(response, "Could not delete this story."));
+    }
+    setStories((previous) => previous.filter((story) => story.id !== storyId));
+    setBookmarkedIds((previous) => previous.filter((id) => id !== storyId));
   };
 
   const toggleReaction = async (storyId: string, reactionType: ReactionType) => {
@@ -497,17 +410,11 @@ export function QuinspenProvider({ children }: { children: React.ReactNode }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type: reactionType }),
     });
-    const result: unknown = await response.json();
     if (!response.ok) {
-      const message =
-        result && typeof result === "object" && "error" in result &&
-        typeof result.error === "string"
-          ? result.error
-          : "Could not save your reaction.";
-      throw new Error(message);
+      throw new Error(await errorMessage(response, "Could not save your reaction."));
     }
 
-    const reactionResult = result as {
+    const reactionResult = (await response.json()) as {
       counts: StoryItem["reactions"];
       userReactions: ReactionType[];
     };
@@ -515,8 +422,8 @@ export function QuinspenProvider({ children }: { children: React.ReactNode }) {
       ...previous,
       [storyId]: reactionResult.userReactions,
     }));
-    setStories((prev) =>
-      prev.map((story) =>
+    setStories((previous) =>
+      previous.map((story) =>
         story.id === storyId
           ? { ...story, reactions: reactionResult.counts }
           : story
@@ -524,7 +431,10 @@ export function QuinspenProvider({ children }: { children: React.ReactNode }) {
     );
   };
 
-  const addComment = async (storyId: string, content: string): Promise<StoryComment> => {
+  const addComment = async (
+    storyId: string,
+    content: string
+  ): Promise<StoryComment> => {
     if (!currentUser) {
       openAuthModal("signup");
       throw new Error("Please create an account to leave a reflection.");
@@ -535,206 +445,153 @@ export function QuinspenProvider({ children }: { children: React.ReactNode }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content }),
     });
-    const result: unknown = await response.json();
     if (!response.ok) {
-      const message =
-        result && typeof result === "object" && "error" in result &&
-        typeof result.error === "string"
-          ? result.error
-          : "Could not post your reflection.";
-      throw new Error(message);
+      throw new Error(await errorMessage(response, "Could not post your reflection."));
     }
-    const newComment = result as StoryComment;
+    const newComment = (await response.json()) as StoryComment;
 
-    setStories((prev) =>
-      prev.map((s) => {
-        if (s.id === storyId) {
-          return {
-            ...s,
-            commentsCount: s.commentsCount + 1,
-          };
-        }
-        return s;
-      })
+    setStories((previous) =>
+      previous.map((story) =>
+        story.id === storyId
+          ? { ...story, commentsCount: story.commentsCount + 1 }
+          : story
+      )
     );
 
     return newComment;
   };
 
-  const toggleBookmark = (storyId: string) => {
+  const toggleBookmark = async (storyId: string) => {
     if (!currentUser) {
       openAuthModal("signup");
       return;
     }
 
     const isBookmarked = bookmarkedIds.includes(storyId);
-    setBookmarkedIds((prev) =>
-      isBookmarked ? prev.filter((id) => id !== storyId) : [...prev, storyId]
+    setBookmarkedIds((previous) =>
+      isBookmarked
+        ? previous.filter((id) => id !== storyId)
+        : [storyId, ...previous]
     );
 
-    if (supabase) {
-      if (isBookmarked) {
-        supabase
-          .from("Bookmark")
-          .delete()
-          .match({ storyId, userId: currentUser.id })
-          .then();
-      } else {
-        supabase
-          .from("Bookmark")
-          .insert({ storyId, userId: currentUser.id })
-          .then();
-      }
+    const response = await fetch(`/api/stories/${storyId}/bookmark`, {
+      method: isBookmarked ? "DELETE" : "POST",
+    });
+    if (!response.ok) {
+      setBookmarkedIds((previous) =>
+        isBookmarked
+          ? [storyId, ...previous]
+          : previous.filter((id) => id !== storyId)
+      );
+      throw new Error(await errorMessage(response, "Could not save this bookmark."));
     }
   };
 
-  // Whispers / Connections
-  const sendWhisperRequest = (
+  const sendWhisperRequest = async (
     storyId: string,
-    storyTitle: string,
-    recipientId: string,
     initialNote: string
-  ): WhisperConnectionItem => {
+  ): Promise<WhisperConnectionItem> => {
     if (!currentUser) {
       openAuthModal("signup");
       throw new Error("Please create an account to whisper to an author.");
     }
 
-    const connectionId = "whisper-conn-" + Date.now();
-    const msgId = "msg-" + Date.now();
-
-    const newMsg: WhisperMessageItem = {
-      id: msgId,
-      connectionId,
-      senderId: currentUser.id,
-      senderPenName: currentUser.penName,
-      senderAvatarIcon: currentUser.avatarIcon,
-      senderAvatarColor: currentUser.avatarColor,
-      content: initialNote,
-      isRead: false,
-      createdAt: new Date().toISOString(),
-    };
-
-    const newConnection: WhisperConnectionItem = {
-      id: connectionId,
-      storyId,
-      storyTitle,
-      initiatorId: currentUser.id,
-      initiatorPenName: currentUser.penName,
-      initiatorAvatarIcon: currentUser.avatarIcon,
-      initiatorAvatarColor: currentUser.avatarColor,
-      recipientId,
-      recipientPenName: "Author Scribe",
-      recipientAvatarIcon: "feather",
-      recipientAvatarColor: "amber",
-      status: "PENDING",
-      initialNote,
-      lastMessage: initialNote,
-      lastMessageAt: new Date().toISOString(),
-      unreadCount: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      messages: [newMsg],
-    };
-
-    if (supabase) {
-      supabase
-        .from("WhisperConnection")
-        .insert({
-          id: connectionId,
-          storyId,
-          initiatorId: currentUser.id,
-          recipientId,
-          initialNote,
-          status: "PENDING",
-        })
-        .then(() => {
-          supabase.from("WhisperMessage").insert({
-            id: msgId,
-            connectionId,
-            senderId: currentUser.id,
-            content: initialNote,
-          });
-        });
+    const response = await fetch("/api/whispers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ storyId, initialNote }),
+    });
+    if (!response.ok) {
+      throw new Error(await errorMessage(response, "Could not send your whisper."));
     }
-
-    setWhispers((prev) => [newConnection, ...prev]);
-    return newConnection;
+    const connection = (await response.json()) as WhisperConnectionItem;
+    setWhispers((previous) => [connection, ...previous]);
+    return connection;
   };
 
-  const respondToWhisper = (connectionId: string, status: "ACCEPTED" | "DECLINED") => {
-    if (supabase) {
-      supabase
-        .from("WhisperConnection")
-        .update({ status })
-        .eq("id", connectionId)
-        .then();
+  const respondToWhisper = async (
+    connectionId: string,
+    status: "ACCEPTED" | "DECLINED"
+  ) => {
+    const response = await fetch(`/api/whispers/${connectionId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    if (!response.ok) {
+      throw new Error(await errorMessage(response, "Could not update this whisper."));
     }
-    setWhispers((prev) =>
-      prev.map((w) =>
-        w.id === connectionId
-          ? { ...w, status, updatedAt: new Date().toISOString() }
-          : w
+    const updated = (await response.json()) as WhisperConnectionItem;
+    setWhispers((previous) =>
+      previous.map((connection) =>
+        connection.id === connectionId ? updated : connection
       )
     );
   };
 
-  const sendWhisperMessage = (connectionId: string, content: string) => {
-    if (!currentUser) return;
-
-    const msg: WhisperMessageItem = {
-      id: "msg-" + Date.now(),
-      connectionId,
-      senderId: currentUser.id,
-      senderPenName: currentUser.penName,
-      senderAvatarIcon: currentUser.avatarIcon,
-      senderAvatarColor: currentUser.avatarColor,
-      content,
-      isRead: true,
-      createdAt: new Date().toISOString(),
-    };
-
-    if (supabase) {
-      supabase.from("WhisperMessage").insert({
-        id: msg.id,
-        connectionId,
-        senderId: currentUser.id,
-        content,
-      }).then();
+  const sendWhisperMessage = async (
+    connectionId: string,
+    content: string
+  ): Promise<WhisperMessageItem> => {
+    const response = await fetch(`/api/whispers/${connectionId}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    });
+    if (!response.ok) {
+      throw new Error(await errorMessage(response, "Could not send your whisper."));
     }
-
-    setWhispers((prev) =>
-      prev.map((w) => {
-        if (w.id !== connectionId) return w;
-        return {
-          ...w,
-          lastMessage: content,
-          lastMessageAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          messages: [...w.messages, msg],
-        };
-      })
+    const message = (await response.json()) as WhisperMessageItem;
+    setWhispers((previous) =>
+      previous.map((connection) =>
+        connection.id === connectionId
+          ? {
+              ...connection,
+              lastMessage: message.content,
+              lastMessageAt: message.createdAt,
+              updatedAt: message.createdAt,
+              messages: [...connection.messages, message],
+            }
+          : connection
+      )
     );
+    return message;
   };
 
-  const markWhisperAsRead = (connectionId: string) => {
-    setWhispers((prev) =>
-      prev.map((w) => {
-        if (w.id !== connectionId) return w;
-        return {
-          ...w,
-          unreadCount: 0,
-          messages: w.messages.map((m) => ({ ...m, isRead: true })),
-        };
-      })
+  const markWhisperAsRead = async (connectionId: string) => {
+    const connection = whispers.find((item) => item.id === connectionId);
+    if (!connection || !connection.unreadCount) return;
+
+    const response = await fetch(`/api/whispers/${connectionId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ markRead: true }),
+    });
+    if (!response.ok) {
+      throw new Error(await errorMessage(response, "Could not mark whispers as read."));
+    }
+    setWhispers((previous) =>
+      previous.map((item) =>
+        item.id === connectionId
+          ? {
+              ...item,
+              unreadCount: 0,
+              messages: item.messages.map((message) => ({
+                ...message,
+                isRead: true,
+              })),
+            }
+          : item
+      )
     );
   };
 
   const unreadWhispersCount = currentUser
     ? whispers.filter(
-        (w) =>
-          w.recipientId === currentUser.id &&
-          (w.status === "PENDING" || (w.unreadCount && w.unreadCount > 0))
+        (connection) =>
+          connection.recipientId === currentUser.id &&
+          (connection.status === "PENDING" ||
+            (connection.unreadCount ?? 0) > 0)
       ).length
     : 0;
 
@@ -755,19 +612,14 @@ export function QuinspenProvider({ children }: { children: React.ReactNode }) {
         searchQuery,
         ambientTrack,
         unreadWhispersCount,
-        isAuthModalOpen,
-        authModalMode,
         isListenerModalOpen,
         setSelectedCircle,
         setSelectedMood,
         setSearchQuery,
         setAmbientTrack,
         openAuthModal,
-        closeAuthModal,
         openListenerModal,
         closeListenerModal,
-        signUpWithEmail,
-        signInWithEmail,
         signOut,
         updatePenProfile,
         generateNewPenIdentity,

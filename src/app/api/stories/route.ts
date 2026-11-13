@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import {
-  authErrorStatus,
-  ensureDatabaseProfile,
-  getAuthenticatedUser,
-} from "@/lib/requestAuth";
+import { authErrorStatus, getAuthenticatedUser } from "@/lib/requestAuth";
 import { STORY_CIRCLES } from "@/lib/quinspenData";
 import { STORY_INCLUDE, toStoryItem } from "@/lib/storyDto";
 import { randomUUID } from "crypto";
@@ -48,7 +44,9 @@ export async function GET(request: Request) {
       orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json(stories.map((story) => toStoryItem(story, auth.user.id)));
+    return NextResponse.json(
+      stories.map((story) => toStoryItem(story, auth.profile.id))
+    );
   } catch (error) {
     console.error("Failed to fetch stories:", error);
     return NextResponse.json(
@@ -129,7 +127,6 @@ export async function POST(request: Request) {
 
     const words = content.trim().split(/\s+/).length;
     const readTimeMinutes = Math.max(1, Math.ceil(words / 200));
-    const author = await ensureDatabaseProfile(auth.user);
     const created = await prisma.story.create({
       data: {
         slug,
@@ -146,11 +143,13 @@ export async function POST(request: Request) {
           isGhostMode === true && typeof ghostAlias === "string"
             ? ghostAlias.trim().slice(0, 60) || "Nameless Scribe"
             : null,
-        authorId: author.id,
+        authorId: auth.profile.id,
       },
       include: STORY_INCLUDE,
     });
-    return NextResponse.json(toStoryItem(created, auth.user.id), { status: 201 });
+    return NextResponse.json(toStoryItem(created, auth.profile.id), {
+      status: 201,
+    });
   } catch (error) {
     console.error("Failed to create story:", error);
     return NextResponse.json(

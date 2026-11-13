@@ -2,9 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   authErrorStatus,
-  ensureDatabaseProfile,
   getAuthenticatedUser,
-  isListenerStaff,
 } from "@/lib/requestAuth";
 
 function sessionResponse(
@@ -58,7 +56,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const isStaff = isListenerStaff(auth.user.email);
+    const isStaff = auth.isListener;
     const staffView = new URL(request.url).searchParams.get("view") === "staff";
     if (staffView && !isStaff) {
       return NextResponse.json({ error: "Listener staff access is required." }, { status: 403 });
@@ -69,10 +67,10 @@ export async function GET(request: Request) {
         ? {
             OR: [
               { status: "WAITING" },
-              { status: "ACTIVE", assignedStaffId: auth.user.id },
+              { status: "ACTIVE", assignedStaffId: auth.profile.id },
             ],
           }
-        : { userId: auth.user.id, status: { not: "CLOSED" } },
+        : { userId: auth.profile.id, status: { not: "CLOSED" } },
       include: { messages: { orderBy: { createdAt: "asc" } } },
       orderBy: { updatedAt: "desc" },
     });
@@ -113,10 +111,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const profile = await ensureDatabaseProfile(auth.user);
+    const profile = auth.profile;
     const session = await prisma.listenerSession.create({
       data: {
-        userId: auth.user.id,
+        userId: profile.id,
         penName: profile.penName,
         topic: topic.trim(),
       },
