@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import { connection } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { authErrorStatus, getAuthenticatedUser } from "@/lib/requestAuth";
 
 export async function GET() {
+  await connection();
   const auth = await getAuthenticatedUser();
   if (!auth.user) {
     return NextResponse.json(
