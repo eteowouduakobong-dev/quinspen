@@ -298,9 +298,14 @@ export function ListenerSessionModal({ isOpen, onClose }: ListenerSessionModalPr
                 <Phone className="h-4 w-4 text-rose-300" />
                 Need immediate help?
               </div>
-              If you or someone else is in immediate danger, contact your local
-              emergency services. Quinspen listener chat is not emergency or clinical
-              care.
+              <p>
+                Call or text <strong className="text-stone-200">988</strong> (US Suicide
+                and Crisis Lifeline, free, 24/7). Outside the US, contact your local
+                emergency services.
+              </p>
+              <p className="mt-2 text-stone-500">
+                Quinspen listener chat is not emergency or clinical care.
+              </p>
             </div>
 
             <button
@@ -327,6 +332,14 @@ export function ListenerSessionModal({ isOpen, onClose }: ListenerSessionModalPr
               >
                 End conversation
               </button>
+            </div>
+
+            <div className="mb-3 flex items-start gap-2 rounded-xl border border-stone-800 bg-stone-950 p-3 text-[11px] leading-relaxed text-stone-400">
+              <Phone className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-400" />
+              <span>
+                In crisis? Call or text <strong className="text-stone-200">988</strong>{" "}
+                (US, free, 24/7) or contact your local emergency services.
+              </span>
             </div>
 
             <div className="min-h-36 flex-1 space-y-3 overflow-y-auto rounded-xl bg-stone-950/60 p-3">
