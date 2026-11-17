@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { isPrismaMocked, prisma } from "@/lib/prisma";
 import {
   authErrorStatus,
   getAuthenticatedUser,
@@ -48,7 +48,7 @@ export async function GET(request: Request) {
       { status: authErrorStatus(auth.error) }
     );
   }
-  if (!process.env.DATABASE_URL) {
+  if (!process.env.DATABASE_URL && !isPrismaMocked) {
     return NextResponse.json(
       { error: "The listener service is not configured." },
       { status: 503 }
@@ -93,7 +93,7 @@ export async function POST(request: Request) {
       { status: authErrorStatus(auth.error) }
     );
   }
-  if (!process.env.DATABASE_URL) {
+  if (!process.env.DATABASE_URL && !isPrismaMocked) {
     return NextResponse.json(
       { error: "The listener service is not configured." },
       { status: 503 }

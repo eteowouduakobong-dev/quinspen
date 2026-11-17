@@ -102,10 +102,22 @@ async function errorMessage(response: Response, fallback: string): Promise<strin
   return fallback;
 }
 
-export function QuinspenProvider({ children }: { children: React.ReactNode }) {
+interface CoreProviderProps {
+  children: React.ReactNode;
+  authUserId: string | undefined;
+  isLoaded: boolean;
+  isSignedIn: boolean;
+  onSignOut: () => Promise<void>;
+}
+
+function QuinspenCoreProvider({
+  children,
+  authUserId,
+  isLoaded,
+  isSignedIn,
+  onSignOut,
+}: CoreProviderProps) {
   const router = useRouter();
-  const { user, isLoaded, isSignedIn } = useUser();
-  const { signOut: clerkSignOut } = useClerk();
 
   const [currentUser, setCurrentUser] = useState<AnonymousPenIdentity | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
@@ -136,13 +148,12 @@ export function QuinspenProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const currentUserId = currentUser?.id;
-  const clerkUserId = user?.id;
 
   useEffect(() => {
     if (!isLoaded) return;
 
     let active = true;
-    if (!isSignedIn || !clerkUserId) {
+    if (!isSignedIn || !authUserId) {
       queueMicrotask(() => {
         clearAccountState();
         setIsLoadingAuth(false);
@@ -168,7 +179,7 @@ export function QuinspenProvider({ children }: { children: React.ReactNode }) {
         setStoriesError(null);
       })
       .catch((error: unknown) => {
-        console.error("Could not load the Clerk-linked profile:", error);
+        console.error("Could not load the linked profile:", error);
         if (!active) return;
         setCurrentUser(null);
         setStoriesError(
@@ -182,7 +193,7 @@ export function QuinspenProvider({ children }: { children: React.ReactNode }) {
     return () => {
       active = false;
     };
-  }, [isLoaded, isSignedIn, clerkUserId, clearAccountState]);
+  }, [isLoaded, isSignedIn, authUserId, clearAccountState]);
 
   useEffect(() => {
     if (!currentUserId) {
@@ -296,7 +307,7 @@ export function QuinspenProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     clearAccountState();
     setIsLoadingAuth(false);
-    await clerkSignOut({ redirectUrl: "/" });
+    await onSignOut();
   };
 
   const applyProfile = (profile: AnonymousPenIdentity) => {
@@ -637,6 +648,103 @@ export function QuinspenProvider({ children }: { children: React.ReactNode }) {
       {children}
     </QuinspenContext.Provider>
   );
+}
+
+function QuinspenClerkBridge({ children }: { children: React.ReactNode }) {
+  const { user, isLoaded, isSignedIn } = useUser();
+  const { signOut: clerkSignOut } = useClerk();
+
+  const onSignOut = useCallback(async () => {
+    await clerkSignOut({ redirectUrl: "/" });
+  }, [clerkSignOut]);
+
+  return (
+    <QuinspenCoreProvider
+      authUserId={user?.id}
+      isLoaded={isLoaded}
+      isSignedIn={Boolean(isSignedIn)}
+      onSignOut={onSignOut}
+    >
+      {children}
+    </QuinspenCoreProvider>
+  );
+}
+
+function QuinspenLocalBridge({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const [authUserId, setAuthUserId] = useState<string | undefined>(undefined);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [isSignedIn, setIsSignedIn] = useState(false);
+
+  const refreshLocalAuth = useCallback(() => {
+    let active = true;
+    void fetch("/api/auth/local", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data: { signedIn?: boolean; userId?: string | null }) => {
+        if (!active) return;
+        setIsSignedIn(Boolean(data?.signedIn && data?.userId));
+        setAuthUserId(data?.userId ?? undefined);
+      })
+      .catch(() => {
+        if (!active) return;
+        setIsSignedIn(false);
+        setAuthUserId(undefined);
+      })
+      .finally(() => {
+        if (active) setIsLoaded(true);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const cleanup = refreshLocalAuth();
+    const handleAuthChange = () => {
+      refreshLocalAuth();
+    };
+    window.addEventListener("quinspen-auth-changed", handleAuthChange);
+    return () => {
+      cleanup();
+      window.removeEventListener("quinspen-auth-changed", handleAuthChange);
+    };
+  }, [refreshLocalAuth]);
+
+  const onSignOut = useCallback(async () => {
+    await fetch("/api/auth/local", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "signout" }),
+    });
+    setIsSignedIn(false);
+    setAuthUserId(undefined);
+    router.push("/");
+  }, [router]);
+
+  return (
+    <QuinspenCoreProvider
+      authUserId={authUserId}
+      isLoaded={isLoaded}
+      isSignedIn={isSignedIn}
+      onSignOut={onSignOut}
+    >
+      {children}
+    </QuinspenCoreProvider>
+  );
+}
+
+export function QuinspenProvider({
+  children,
+  clerkEnabled = false,
+}: {
+  children: React.ReactNode;
+  clerkEnabled?: boolean;
+}) {
+  if (clerkEnabled) {
+    return <QuinspenClerkBridge>{children}</QuinspenClerkBridge>;
+  }
+  return <QuinspenLocalBridge>{children}</QuinspenLocalBridge>;
 }
 
 export function useQuinspen() {

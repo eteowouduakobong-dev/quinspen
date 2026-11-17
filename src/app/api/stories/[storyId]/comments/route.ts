@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { isPrismaMocked, prisma } from "@/lib/prisma";
 import { authErrorStatus, getAuthenticatedUser } from "@/lib/requestAuth";
 
 type RouteContext = { params: Promise<{ storyId: string }> };
@@ -12,7 +12,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
       { status: authErrorStatus(auth.error) }
     );
   }
-  if (!process.env.DATABASE_URL) {
+  if (!process.env.DATABASE_URL && !isPrismaMocked) {
     return NextResponse.json(
       { error: "The story database is not configured." },
       { status: 503 }
@@ -62,7 +62,7 @@ export async function POST(request: Request, { params }: RouteContext) {
       { status: authErrorStatus(auth.error) }
     );
   }
-  if (!process.env.DATABASE_URL) {
+  if (!process.env.DATABASE_URL && !isPrismaMocked) {
     return NextResponse.json(
       { error: "The story database is not configured." },
       { status: 503 }

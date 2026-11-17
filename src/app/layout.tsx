@@ -33,27 +33,31 @@ export const metadata: Metadata = {
   ],
 };
 
+const clerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const content = (
+    <QuinspenProvider clerkEnabled={clerkEnabled}>
+      <Suspense fallback={<div className="h-16 bg-stone-950 border-b border-stone-800" />}>
+        <Navbar />
+      </Suspense>
+      <main className="flex-1 flex flex-col">{children}</main>
+      <Footer />
+      <LayoutShell />
+    </QuinspenProvider>
+  );
+
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
     >
       <body className="min-h-full flex flex-col bg-stone-950 text-stone-100 selection:bg-amber-500/30 selection:text-amber-200">
-        <ClerkProvider>
-          <QuinspenProvider>
-          <Suspense fallback={<div className="h-16 bg-stone-950 border-b border-stone-800" />}>
-          <Navbar />
-          </Suspense>
-          <main className="flex-1 flex flex-col">{children}</main>
-          <Footer />
-          <LayoutShell />
-          </QuinspenProvider>
-        </ClerkProvider>
+        {clerkEnabled ? <ClerkProvider>{content}</ClerkProvider> : content}
       </body>
     </html>
   );

@@ -2,8 +2,11 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import type { User as ClerkUser } from "@clerk/nextjs/server";
 import type { User as DatabaseUser } from "@prisma/client";
 import { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { cookies } from "next/headers";
+import { isPrismaMocked, prisma } from "@/lib/prisma";
 import { generatePenIdentity, generatePenTag } from "@/lib/penIdentity";
+
+export const LOCAL_SESSION_COOKIE = "quinspen_local_session";
 
 export type AuthError = "not-configured" | "unauthenticated";
 
@@ -23,6 +26,13 @@ export type AuthFailure = {
 
 export type AuthResult = AuthSuccess | AuthFailure;
 
+export function isClerkConfigured(): boolean {
+  return Boolean(
+    process.env.CLERK_SECRET_KEY &&
+      process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+  );
+}
+
 function clerkEmail(user: ClerkUser): string | null {
   return (
     user.primaryEmailAddress?.emailAddress ??
@@ -31,17 +41,93 @@ function clerkEmail(user: ClerkUser): string | null {
   );
 }
 
-export async function getAuthenticatedUser(): Promise<AuthResult> {
-  if (
-    !process.env.CLERK_SECRET_KEY ||
-    !process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-  ) {
+interface LocalSessionPayload {
+  email: string;
+  penName?: string;
+  role?: string;
+}
+
+export async function ensureLocalProfile(
+  email: string,
+  preferredPenName?: string
+): Promise<DatabaseUser> {
+  const existing = await prisma.user.findFirst({
+    where: { email: { equals: email, mode: "insensitive" } },
+  });
+  if (existing) {
+    return existing;
+  }
+
+  const generated = generatePenIdentity();
+  const penName = preferredPenName?.trim()
+    ? preferredPenName.trim().slice(0, 80)
+    : generated.penName;
+
+  return prisma.user.create({
+    data: {
+      clerkId: `local_${email.toLowerCase()}`,
+      email,
+      penName,
+      penTag: await uniquePenTag(),
+      avatarIcon: "feather",
+      avatarColor: "amber",
+      bio: null,
+    },
+  });
+}
+
+async function getLocalAuthenticatedUser(): Promise<AuthResult> {
+  try {
+    const cookieStore = await cookies();
+    const raw = cookieStore.get(LOCAL_SESSION_COOKIE)?.value;
+    if (!raw) {
+      return {
+        user: null,
+        profile: null,
+        isListener: false,
+        error: "unauthenticated",
+      };
+    }
+
+    const parsed = JSON.parse(raw) as Partial<LocalSessionPayload>;
+    if (!parsed || typeof parsed.email !== "string" || !parsed.email.trim()) {
+      return {
+        user: null,
+        profile: null,
+        isListener: false,
+        error: "unauthenticated",
+      };
+    }
+
+    const profile = await ensureLocalProfile(
+      parsed.email.trim(),
+      typeof parsed.penName === "string" ? parsed.penName : undefined
+    );
+    const isListener = parsed.role === "listener";
+
+    return {
+      user: {
+        id: profile.clerkId ?? profile.id,
+        publicMetadata: { role: isListener ? "listener" : "user" },
+      } as unknown as ClerkUser,
+      profile,
+      isListener,
+      error: null,
+    };
+  } catch (error) {
+    console.error("Failed to verify local session:", error);
     return {
       user: null,
       profile: null,
       isListener: false,
-      error: "not-configured",
+      error: "unauthenticated",
     };
+  }
+}
+
+export async function getAuthenticatedUser(): Promise<AuthResult> {
+  if (!isClerkConfigured()) {
+    return getLocalAuthenticatedUser();
   }
 
   let user: ClerkUser | null = null;
@@ -99,7 +185,7 @@ export async function uniquePenTag(): Promise<string> {
 }
 
 export async function ensureDatabaseProfile(user: ClerkUser) {
-  if (!process.env.DATABASE_URL) {
+  if (!process.env.DATABASE_URL && !isPrismaMocked) {
     throw new Error("The database is not configured.");
   }
 
