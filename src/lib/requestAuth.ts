@@ -1,4 +1,4 @@
-import { auth, currentUser } from "@clerk/nextjs/server";
+﻿import { auth, currentUser } from "@clerk/nextjs/server";
 import type { User as ClerkUser } from "@clerk/nextjs/server";
 import type { User as DatabaseUser } from "@prisma/client";
 import { Prisma } from "@prisma/client";
@@ -14,6 +14,7 @@ export type AuthSuccess = {
   user: ClerkUser;
   profile: DatabaseUser;
   isListener: boolean;
+  isAdmin: boolean;
   error: null;
 };
 
@@ -21,6 +22,7 @@ export type AuthFailure = {
   user: null;
   profile: null;
   isListener: false;
+  isAdmin: false;
   error: AuthError;
 };
 
@@ -85,6 +87,7 @@ async function getLocalAuthenticatedUser(): Promise<AuthResult> {
         user: null,
         profile: null,
         isListener: false,
+        isAdmin: false,
         error: "unauthenticated",
       };
     }
@@ -95,6 +98,7 @@ async function getLocalAuthenticatedUser(): Promise<AuthResult> {
         user: null,
         profile: null,
         isListener: false,
+        isAdmin: false,
         error: "unauthenticated",
       };
     }
@@ -103,7 +107,7 @@ async function getLocalAuthenticatedUser(): Promise<AuthResult> {
       parsed.email.trim(),
       typeof parsed.penName === "string" ? parsed.penName : undefined
     );
-    const isListener = parsed.role === "listener";
+    const isListener = false;
 
     return {
       user: {
@@ -112,6 +116,7 @@ async function getLocalAuthenticatedUser(): Promise<AuthResult> {
       } as unknown as ClerkUser,
       profile,
       isListener,
+      isAdmin: false,
       error: null,
     };
   } catch (error) {
@@ -120,6 +125,7 @@ async function getLocalAuthenticatedUser(): Promise<AuthResult> {
       user: null,
       profile: null,
       isListener: false,
+      isAdmin: false,
       error: "unauthenticated",
     };
   }
@@ -138,6 +144,7 @@ export async function getAuthenticatedUser(): Promise<AuthResult> {
         user: null,
         profile: null,
         isListener: false,
+        isAdmin: false,
         error: "unauthenticated",
       };
     }
@@ -151,6 +158,7 @@ export async function getAuthenticatedUser(): Promise<AuthResult> {
       user: null,
       profile: null,
       isListener: false,
+      isAdmin: false,
       error: "unauthenticated",
     };
   }
@@ -160,6 +168,7 @@ export async function getAuthenticatedUser(): Promise<AuthResult> {
     user,
     profile,
     isListener: isListenerStaff(user),
+    isAdmin: isAdminStaff(user),
     error: null,
   };
 }
@@ -167,7 +176,9 @@ export async function getAuthenticatedUser(): Promise<AuthResult> {
 export function isListenerStaff(user: ClerkUser): boolean {
   return user.publicMetadata?.role === "listener";
 }
-
+export function isAdminStaff(user: ClerkUser): boolean {
+  return user.publicMetadata?.role === "admin";
+}
 export function authErrorStatus(error: AuthError): number {
   return error === "not-configured" ? 503 : 401;
 }
