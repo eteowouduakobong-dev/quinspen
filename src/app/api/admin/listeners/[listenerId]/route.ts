@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { clerkClient } from "@clerk/nextjs/server";
 import { getAuthenticatedUser } from "@/lib/requestAuth";
 
@@ -43,10 +43,14 @@ export async function PATCH(
       );
     }
 
-    const updatedUser =
-      body.action === "deactivate"
-        ? await client.users.banUser(listenerId)
-        : await client.users.unbanUser(listenerId);
+    const listenerStatus =
+      body.action === "deactivate" ? "inactive" : "active";
+
+    const updatedUser = await client.users.updateUserMetadata(listenerId, {
+      publicMetadata: {
+        listenerStatus,
+      },
+    });
 
     return NextResponse.json({
       success: true,
@@ -56,7 +60,8 @@ export async function PATCH(
           : "Listener activated successfully.",
       listener: {
         id: updatedUser.id,
-        banned: updatedUser.banned,
+        role: updatedUser.publicMetadata.role,
+        listenerStatus: updatedUser.publicMetadata.listenerStatus,
       },
     });
   } catch (error) {

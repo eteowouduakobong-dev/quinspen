@@ -1,4 +1,4 @@
-﻿import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import type { User as ClerkUser } from "@clerk/nextjs/server";
 import type { User as DatabaseUser } from "@prisma/client";
 import { Prisma } from "@prisma/client";
@@ -174,7 +174,7 @@ export async function getAuthenticatedUser(): Promise<AuthResult> {
 }
 
 export function isListenerStaff(user: ClerkUser): boolean {
-  return user.publicMetadata?.role === "listener";
+  return user.publicMetadata?.role === "listener" && user.publicMetadata?.listenerStatus !== "inactive";
 }
 export function isAdminStaff(user: ClerkUser): boolean {
   return user.publicMetadata?.role === "admin";
@@ -281,3 +281,4 @@ export async function ensureDatabaseProfile(user: ClerkUser) {
 
   throw new Error("Could not create your anonymous profile.");
 }
+

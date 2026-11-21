@@ -38,7 +38,7 @@ export async function GET() {
         )?.emailAddress ?? null,
         createdAt: user.createdAt,
         lastSignInAt: user.lastSignInAt,
-        banned: user.banned,
+        listenerStatus: user.publicMetadata?.listenerStatus === "inactive" ? "inactive" : "active",
       }));
 
     return NextResponse.json({
@@ -55,3 +55,4 @@ export async function GET() {
     );
   }
 }
+
