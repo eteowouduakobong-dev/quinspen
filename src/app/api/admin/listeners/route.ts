@@ -1,8 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextResponse, connection } from "next/server";
 import { clerkClient } from "@clerk/nextjs/server";
 import { getAuthenticatedUser } from "@/lib/requestAuth";
 
 export async function GET() {
+  await connection();
+
   try {
     const auth = await getAuthenticatedUser();
 
@@ -28,17 +30,28 @@ export async function GET() {
     });
 
     const listeners = result.data
-      .filter((user) => user.publicMetadata?.role === "listener")
+      .filter((user) =>
+        ["listener", "admin"].includes(
+          String(user.publicMetadata?.role)
+        )
+      )
       .map((user) => ({
         id: user.id,
         firstName: user.firstName,
         lastName: user.lastName,
-        emailAddress: user.emailAddresses.find(
-          (email) => email.id === user.primaryEmailAddressId
-        )?.emailAddress ?? null,
+        emailAddress:
+          user.emailAddresses.find(
+            (email) => email.id === user.primaryEmailAddressId
+          )?.emailAddress ?? null,
         createdAt: user.createdAt,
         lastSignInAt: user.lastSignInAt,
-        listenerStatus: user.publicMetadata?.listenerStatus === "inactive" ? "inactive" : "active",
+        role: user.publicMetadata?.role,
+        listenerStatus:
+          user.publicMetadata?.role === "listener"
+            ? user.publicMetadata?.listenerStatus === "inactive"
+              ? "inactive"
+              : "active"
+            : null,
       }));
 
     return NextResponse.json({
@@ -55,4 +68,3 @@ export async function GET() {
     );
   }
 }
-

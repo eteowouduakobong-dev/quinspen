@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextResponse, connection } from "next/server";
 import { clerkClient } from "@clerk/nextjs/server";
 import { getAuthenticatedUser } from "@/lib/requestAuth";
 
 export async function GET() {
+  await connection();
   try {
     const auth = await getAuthenticatedUser();
 

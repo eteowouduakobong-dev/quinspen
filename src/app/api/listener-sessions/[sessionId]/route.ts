@@ -63,7 +63,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: "Listener session not found." }, { status: 404 });
     }
 
-    const staffView = auth.isListener;
+    const staffView = auth.isListener || auth.isAdmin;
     const ownsSession = session.userId === auth.profile.id;
     if (
       !ownsSession &&
@@ -115,7 +115,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: "Listener session not found." }, { status: 404 });
     }
 
-    const staffView = auth.isListener;
+    const staffView = auth.isListener || auth.isAdmin;
     const ownsSession = session.userId === auth.profile.id;
     if (status === "ACTIVE") {
       if (!staffView) {

@@ -56,7 +56,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const isStaff = auth.isListener;
+    const isStaff = auth.isListener || auth.isAdmin;
     const staffView = new URL(request.url).searchParams.get("view") === "staff";
     if (staffView && !isStaff) {
       return NextResponse.json({ error: "Listener staff access is required." }, { status: 403 });

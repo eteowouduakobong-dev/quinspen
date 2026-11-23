@@ -50,7 +50,7 @@ export async function POST(request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: "Listener session not found." }, { status: 404 });
     }
 
-    const staffView = auth.isListener;
+    const staffView = auth.isListener || auth.isAdmin;
     const isOwner = session.userId === auth.profile.id;
     if (
       (!isOwner &&

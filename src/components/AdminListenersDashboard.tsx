@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useState, FormEvent } from "react";
 import {
@@ -21,7 +21,8 @@ type Listener = {
   emailAddress: string | null;
   createdAt: number;
   lastSignInAt: number | null;
-  listenerStatus: "active" | "inactive";
+  role: "listener" | "admin";
+  listenerStatus: "active" | "inactive" | null;
 };
 
 type Invitation = {
@@ -150,6 +151,46 @@ export function AdminListenersDashboard() {
     }
   }
 
+  async function updateRole(listener: Listener) {
+    const action = listener.role === "listener" ? "promote" : "demote";
+    const targetRole = action === "promote" ? "administrator" : "listener";
+
+    const confirmed = window.confirm(
+      `Are you sure you want to ${action} this account to ${targetRole}?`
+    );
+
+    if (!confirmed) return;
+
+    setProcessingId(listener.id);
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch(
+        `/api/admin/listeners/${listener.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Could not update account role.");
+      }
+
+      setMessage(data.message);
+      await loadDashboard();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Role update failed."
+      );
+    } finally {
+      setProcessingId("");
+    }
+  }
   async function revokeInvitation(invitation: Invitation) {
     if (!window.confirm(`Revoke invitation sent to ${invitation.emailAddress}?`)) {
       return;
@@ -182,11 +223,21 @@ export function AdminListenersDashboard() {
     }
   }
 
-  const activeCount = listeners.filter(
+  const listenerAccounts = listeners.filter(
+    (account) => account.role === "listener"
+  );
+
+  const adminCount = listeners.filter(
+    (account) => account.role === "admin"
+  ).length;
+
+  const activeCount = listenerAccounts.filter(
     (listener) => listener.listenerStatus === "active"
   ).length;
 
-  const inactiveCount = listeners.length - activeCount;
+  const inactiveCount = listenerAccounts.filter(
+    (listener) => listener.listenerStatus === "inactive"
+  ).length;
 
   const pendingInvitations = invitations.filter(
     (invitation) => invitation.status === "pending"
@@ -209,7 +260,7 @@ export function AdminListenersDashboard() {
               </span>
             </div>
             <h1 className="text-3xl sm:text-4xl font-serif font-bold">
-              Listener Management
+              Team Management
             </h1>
             <p className="text-stone-400 mt-2">
               Manage your QUINSPEN human listener team.
@@ -221,7 +272,7 @@ export function AdminListenersDashboard() {
             disabled={loading}
             className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-stone-700 bg-stone-900 hover:border-amber-500/50 text-sm transition-colors"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`w-4 h-4 ${loading ? "-" : ""}`} />
             Refresh Dashboard
           </button>
         </div>
@@ -240,30 +291,36 @@ export function AdminListenersDashboard() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-10">
 
           <StatCard
             icon={<Users className="w-5 h-5" />}
             label="Total Listeners"
-            value={loading ? "—" : listeners.length}
+            value={loading ? "-" : listenerAccounts.length}
           />
 
           <StatCard
             icon={<CheckCircle2 className="w-5 h-5" />}
             label="Active Listeners"
-            value={loading ? "—" : activeCount}
+            value={loading ? "-" : activeCount}
           />
 
           <StatCard
             icon={<ShieldOff className="w-5 h-5" />}
             label="Inactive Listeners"
-            value={loading ? "—" : inactiveCount}
+            value={loading ? "-" : inactiveCount}
+          />
+
+          <StatCard
+            icon={<ShieldCheck className="w-5 h-5" />}
+            label="Admins"
+            value={loading ? "-" : adminCount}
           />
 
           <StatCard
             icon={<Clock className="w-5 h-5" />}
             label="Pending Invitations"
-            value={loading ? "—" : pendingInvitations.length}
+            value={loading ? "-" : pendingInvitations.length}
           />
 
         </div>
@@ -311,7 +368,7 @@ export function AdminListenersDashboard() {
 
         <section className="rounded-2xl border border-stone-800 bg-stone-900/60 overflow-hidden mb-10">
           <div className="p-6 border-b border-stone-800">
-            <h2 className="text-lg font-semibold">Registered Listeners</h2>
+            <h2 className="text-lg font-semibold">Registered Team Members</h2>
             <p className="text-sm text-stone-400 mt-1">
               Manage access to listener responsibilities.
             </p>
@@ -320,13 +377,13 @@ export function AdminListenersDashboard() {
           {loading ? (
             <LoadingState />
           ) : listeners.length === 0 ? (
-            <EmptyState message="No registered listeners found yet." />
+            <EmptyState message="No registered team members found yet." />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">
                 <thead className="bg-stone-950/60 text-stone-400">
                   <tr>
-                    <th className="px-6 py-4 font-medium">Listener</th>
+                    <th className="px-6 py-4 font-medium">Team Member</th>
                     <th className="px-6 py-4 font-medium">Joined</th>
                     <th className="px-6 py-4 font-medium">Last Sign In</th>
                     <th className="px-6 py-4 font-medium">Status</th>
@@ -341,7 +398,7 @@ export function AdminListenersDashboard() {
                         <p className="font-medium text-stone-200">
                           {[listener.firstName, listener.lastName]
                             .filter(Boolean)
-                            .join(" ") || "Unnamed Listener"}
+                            .join(" ") || "Unnamed Team Member"}
                         </p>
                         <p className="text-xs text-stone-500 mt-1">
                           {listener.emailAddress || "No email"}
@@ -359,25 +416,49 @@ export function AdminListenersDashboard() {
                       </td>
 
                       <td className="px-6 py-4">
-                        <StatusBadge status={listener.listenerStatus} />
+                        {listener.role === "admin" ? (
+                          <RoleBadge role="admin" />
+                        ) : (
+                          <StatusBadge status={listener.listenerStatus ?? "active"} />
+                        )}
                       </td>
 
                       <td className="px-6 py-4">
-                        <button
-                          onClick={() => void updateListener(listener)}
-                          disabled={processingId === listener.id}
-                          className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-colors disabled:opacity-50 ${
-                            listener.listenerStatus === "active"
-                              ? "border-rose-500/30 text-rose-400 hover:bg-rose-500/10"
-                              : "border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
-                          }`}
-                        >
-                          {processingId === listener.id
-                            ? "Processing..."
-                            : listener.listenerStatus === "active"
-                              ? "Deactivate"
-                              : "Activate"}
-                        </button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            onClick={() => void updateRole(listener)}
+                            disabled={processingId === listener.id}
+                            className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-colors disabled:opacity-50 ${
+                              listener.role === "listener"
+                                ? "border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+                                : "border-rose-500/30 text-rose-400 hover:bg-rose-500/10"
+                            }`}
+                          >
+                            {processingId === listener.id
+                              ? "Processing..."
+                              : listener.role === "listener"
+                                ? "Promote to Admin"
+                                : "Demote to Listener"}
+                          </button>
+
+                          {listener.role === "listener" && (
+                            <button
+                              onClick={() => void updateListener(listener)}
+                              disabled={processingId === listener.id}
+                              className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-colors disabled:opacity-50 ${
+                                listener.listenerStatus === "active"
+                                  ? "border-rose-500/30 text-rose-400 hover:bg-rose-500/10"
+                                  : "border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
+                              }`}
+                            >
+                              {processingId === listener.id
+                                ? "Processing..."
+                                : listener.listenerStatus === "active"
+                                  ? "Deactivate"
+                                  : "Activate"}
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -437,7 +518,7 @@ export function AdminListenersDashboard() {
         </section>
 
         <div className="mt-10 text-center text-xs text-stone-600">
-          QUINSPEN Administration · Human Listener Management
+          QUINSPEN Administration | Human Team Management
         </div>
 
       </div>
@@ -465,6 +546,21 @@ function StatCard({
   );
 }
 
+function RoleBadge({ role }: { role: "admin" | "listener" }) {
+  const isAdmin = role === "admin";
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
+        isAdmin
+          ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+          : "bg-sky-500/10 text-sky-400 border border-sky-500/20"
+      }`}
+    >
+      {isAdmin ? "Administrator" : "Listener"}
+    </span>
+  );
+}
 function StatusBadge({ status }: { status: string }) {
   const active = status === "active";
 

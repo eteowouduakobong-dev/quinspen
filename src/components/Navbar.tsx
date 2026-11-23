@@ -39,6 +39,15 @@ export function Navbar() {
   const isAdmin = Boolean(
     isMounted && isLoaded && isSignedIn && user?.publicMetadata?.role === "admin"
   );
+  const isListener = Boolean(
+    isMounted &&
+    isLoaded &&
+    isSignedIn &&
+    user?.publicMetadata?.role === "listener" &&
+    user?.publicMetadata?.listenerStatus !== "inactive"
+  );
+
+  const canAccessListenerInbox = isAdmin || isListener;
 
   const {
     currentUser,
@@ -64,6 +73,15 @@ export function Navbar() {
       badge: unreadWhispersCount > 0 ? unreadWhispersCount : null,
     },
     { label: "My Chronicle", href: "/journal", icon: BookMarked },
+    ...(canAccessListenerInbox
+      ? [
+          {
+            label: "Listener Inbox",
+            href: "/listener-inbox",
+            icon: UserCheck,
+          },
+        ]
+      : []),
     ...(isAdmin
       ? [
           {
@@ -241,6 +259,17 @@ export function Navbar() {
                         &ldquo;{currentUser.bio || "Untold reflections"}&rdquo;
                       </p>
                     </div>
+
+                    {canAccessListenerInbox && (
+                      <Link
+                        href="/listener-inbox"
+                        onClick={() => setIsProfileMenuOpen(false)}
+                        className="flex items-center space-x-2 px-3 py-2 rounded-lg text-xs font-semibold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 hover:text-emerald-300 border border-emerald-500/20 transition-colors mb-1"
+                      >
+                        <UserCheck className="w-3.5 h-3.5" />
+                        <span>Listener Inbox</span>
+                      </Link>
+                    )}
 
                     {isAdmin && (
                       <Link

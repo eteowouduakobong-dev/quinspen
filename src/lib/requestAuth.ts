@@ -3,6 +3,7 @@ import type { User as ClerkUser } from "@clerk/nextjs/server";
 import type { User as DatabaseUser } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { cookies } from "next/headers";
+import { unstable_rethrow } from "next/navigation";
 import { isPrismaMocked, prisma } from "@/lib/prisma";
 import { generatePenIdentity, generatePenTag } from "@/lib/penIdentity";
 
@@ -150,6 +151,7 @@ export async function getAuthenticatedUser(): Promise<AuthResult> {
     }
     user = await currentUser();
   } catch (error) {
+    unstable_rethrow(error);
     console.error("Failed to verify the Clerk session:", error);
   }
 
@@ -281,4 +283,3 @@ export async function ensureDatabaseProfile(user: ClerkUser) {
 
   throw new Error("Could not create your anonymous profile.");
 }
-
