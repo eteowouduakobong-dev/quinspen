@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -22,10 +22,24 @@ import {
   Wind,
   Shuffle,
 } from "lucide-react";
+import { useUser } from "@clerk/nextjs";
 import { useQuinspen } from "@/context/QuinspenContext";
+
+const emptySubscribe = () => () => {};
 
 export function Navbar() {
   const pathname = usePathname();
+  const { user, isLoaded, isSignedIn } = useUser();
+  const isMounted = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
+
+  const isAdmin = Boolean(
+    isMounted && isLoaded && isSignedIn && user?.publicMetadata?.role === "admin"
+  );
+
   const {
     currentUser,
     unreadWhispersCount,
@@ -50,6 +64,16 @@ export function Navbar() {
       badge: unreadWhispersCount > 0 ? unreadWhispersCount : null,
     },
     { label: "My Chronicle", href: "/journal", icon: BookMarked },
+    ...(isAdmin
+      ? [
+          {
+            label: "Admin Dashboard",
+            href: "/admin/listeners",
+            icon: ShieldCheck,
+            isAdmin: true,
+          },
+        ]
+      : []),
   ];
 
   const audioOptions: { id: "none" | "rain" | "fire" | "wind"; label: string; icon: typeof Volume2 }[] = [
@@ -89,18 +113,24 @@ export function Navbar() {
           <nav className="hidden md:flex items-center space-x-1">
             {navLinks.map((link) => {
               const Icon = link.icon;
-              const isActive = pathname === link.href;
+              const isActive =
+                pathname === link.href ||
+                (link.href === "/admin/listeners" && pathname.startsWith("/admin"));
               return (
                 <Link
                   key={link.href}
                   href={link.href}
                   className={`relative flex items-center space-x-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all ${
-                    isActive
+                    link.isAdmin
+                      ? isActive
+                        ? "text-amber-300 bg-amber-500/20 border border-amber-500/40 shadow-sm shadow-amber-500/20 font-semibold"
+                        : "text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 hover:text-amber-300 border border-amber-500/30 hover:border-amber-500/50 font-semibold shadow-sm shadow-amber-500/10"
+                      : isActive
                       ? "text-amber-400 bg-amber-500/10 border border-amber-500/20"
                       : "text-stone-300 hover:text-stone-100 hover:bg-stone-900/60"
                   }`}
                 >
-                  <Icon className="w-4 h-4" />
+                  <Icon className={`w-4 h-4 ${link.isAdmin ? "text-amber-400" : ""}`} />
                   <span>{link.label}</span>
                   {link.badge && (
                     <span className="ml-1 px-1.5 py-0.2 bg-rose-500 text-white text-[10px] font-bold rounded-full animate-pulse">
@@ -212,6 +242,17 @@ export function Navbar() {
                       </p>
                     </div>
 
+                    {isAdmin && (
+                      <Link
+                        href="/admin/listeners"
+                        onClick={() => setIsProfileMenuOpen(false)}
+                        className="flex items-center space-x-2 px-3 py-2 rounded-lg text-xs font-semibold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 hover:text-amber-300 border border-amber-500/20 transition-colors mb-1"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Admin Dashboard</span>
+                      </Link>
+                    )}
+
                     <Link
                       href="/journal"
                       onClick={() => setIsProfileMenuOpen(false)}
@@ -270,16 +311,24 @@ export function Navbar() {
       </div>
 
       {/* Mobile Navigation Bar */}
-      <div className="md:hidden border-t border-stone-800/60 bg-stone-950/95 px-2 py-1.5 flex justify-around">
+      <div className="md:hidden border-t border-stone-800/60 bg-stone-950/95 px-2 py-1.5 flex justify-around items-center overflow-x-auto">
         {navLinks.map((link) => {
           const Icon = link.icon;
-          const isActive = pathname === link.href;
+          const isActive =
+            pathname === link.href ||
+            (link.href === "/admin/listeners" && pathname.startsWith("/admin"));
           return (
             <Link
               key={link.href}
               href={link.href}
-              className={`flex flex-col items-center py-1 px-3 rounded-lg text-[11px] font-medium transition-colors ${
-                isActive ? "text-amber-400" : "text-stone-400 hover:text-stone-200"
+              className={`flex flex-col items-center py-1 px-2 rounded-lg text-[11px] font-medium transition-colors shrink-0 ${
+                link.isAdmin
+                  ? isActive
+                    ? "text-amber-300 font-bold bg-amber-500/15"
+                    : "text-amber-400 font-semibold"
+                  : isActive
+                  ? "text-amber-400"
+                  : "text-stone-400 hover:text-stone-200"
               }`}
             >
               <div className="relative">
@@ -290,7 +339,7 @@ export function Navbar() {
                   </span>
                 )}
               </div>
-              <span className="mt-0.5">{link.label}</span>
+              <span className="mt-0.5 whitespace-nowrap">{link.label}</span>
             </Link>
           );
         })}
