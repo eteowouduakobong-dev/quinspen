@@ -25,6 +25,17 @@ type Listener = {
   listenerStatus: "active" | "inactive" | null;
 };
 
+type DirectoryUser = {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  emailAddress: string | null;
+  createdAt: number;
+  lastSignInAt: number | null;
+  role: "user" | "listener" | "admin";
+  listenerStatus: "active" | "inactive" | null;
+};
+
 type Invitation = {
   id: string;
   emailAddress: string;
@@ -42,6 +53,10 @@ export function AdminListenersDashboard() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [processingId, setProcessingId] = useState("");
+  const [directoryUsers, setDirectoryUsers] = useState<DirectoryUser[]>([]);
+  const [directorySearch, setDirectorySearch] = useState("");
+  const [directoryLoading, setDirectoryLoading] = useState(true);
+  const [directoryError, setDirectoryError] = useState("");
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
@@ -75,9 +90,34 @@ export function AdminListenersDashboard() {
     }
   }, []);
 
+  const loadDirectory = useCallback(async () => {
+    setDirectoryLoading(true);
+    setDirectoryError("");
+
+    try {
+      const response = await fetch("/api/admin/users");
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Could not load the user directory.");
+      }
+
+      setDirectoryUsers(data.users || []);
+    } catch (err) {
+      setDirectoryError(
+        err instanceof Error
+          ? err.message
+          : "Could not load the user directory."
+      );
+    } finally {
+      setDirectoryLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void loadDashboard();
-  }, [loadDashboard]);
+    void loadDirectory();
+  }, [loadDashboard, loadDirectory]);
 
   async function inviteListener(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -98,9 +138,9 @@ export function AdminListenersDashboard() {
         throw new Error(data.error || "Invitation could not be sent.");
       }
 
-      setMessage("Listener invitation sent successfully.");
+      setMessage(data.message || "Listener request processed successfully.");
       setEmail("");
-      await loadDashboard();
+      await Promise.all([loadDashboard(), loadDirectory()]);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Invitation failed."
@@ -141,7 +181,7 @@ export function AdminListenersDashboard() {
       }
 
       setMessage(data.message);
-      await loadDashboard();
+      await Promise.all([loadDashboard(), loadDirectory()]);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Status update failed."
@@ -182,7 +222,47 @@ export function AdminListenersDashboard() {
       }
 
       setMessage(data.message);
-      await loadDashboard();
+      await Promise.all([loadDashboard(), loadDirectory()]);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Role update failed."
+      );
+    } finally {
+      setProcessingId("");
+    }
+  }
+  async function updateDirectoryRole(
+    user: DirectoryUser,
+    newRole: DirectoryUser["role"]
+  ) {
+    if (user.role === newRole) return;
+
+    const confirmed = window.confirm(
+      `Change ${user.firstName || user.emailAddress || "this account"}'s role from ${user.role} to ${newRole}?`
+    );
+
+    if (!confirmed) return;
+
+    setProcessingId(user.id);
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch(`/api/admin/users/${user.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: newRole }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Could not update account role.");
+      }
+
+      setMessage(data.message || "Account role updated successfully.");
+
+      await Promise.all([loadDirectory(), loadDashboard()]);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Role update failed."
@@ -246,6 +326,19 @@ export function AdminListenersDashboard() {
   function formatDate(timestamp: number) {
     return new Date(timestamp).toLocaleDateString();
   }
+  const filteredDirectoryUsers = directoryUsers.filter((user) => {
+    const search = directorySearch.trim().toLowerCase();
+    const fullName = [user.firstName, user.lastName]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return (
+      !search ||
+      fullName.includes(search) ||
+      (user.emailAddress || "").toLowerCase().includes(search)
+    );
+  });
 
   return (
     <div className="min-h-screen bg-stone-950 text-stone-100">
@@ -268,7 +361,7 @@ export function AdminListenersDashboard() {
           </div>
 
           <button
-            onClick={() => void loadDashboard()}
+            onClick={() => void Promise.all([loadDashboard(), loadDirectory()])}
             disabled={loading}
             className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-stone-700 bg-stone-900 hover:border-amber-500/50 text-sm transition-colors"
           >
@@ -364,6 +457,124 @@ export function AdminListenersDashboard() {
               {sending ? "Sending..." : "Send Invitation"}
             </button>
           </form>
+        </section>
+
+        <section className="rounded-2xl border border-stone-800 bg-stone-900/60 overflow-hidden mb-10">
+          <div className="p-6 border-b border-stone-800">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold">User Directory</h2>
+                <p className="text-sm text-stone-400 mt-1">
+                  View registered QUINSPEN accounts and manage account roles. Administrators only.
+                </p>
+              </div>
+              <span className="text-sm text-amber-400 font-medium">
+                {directoryUsers.length} Registered Accounts
+              </span>
+            </div>
+
+            <input
+              type="search"
+              value={directorySearch}
+              onChange={(event) => setDirectorySearch(event.target.value)}
+              placeholder="Search by name or email address..."
+              className="mt-5 w-full rounded-xl border border-stone-700 bg-stone-950 px-4 py-3 text-sm outline-none focus:border-amber-500 placeholder:text-stone-600"
+            />
+          </div>
+
+          {directoryError ? (
+            <div className="p-6 text-rose-400 text-sm">{directoryError}</div>
+          ) : directoryLoading ? (
+            <LoadingState />
+          ) : filteredDirectoryUsers.length === 0 ? (
+            <EmptyState
+              message={
+                directorySearch
+                  ? "No accounts match your search."
+                  : "No registered accounts found."
+              }
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-stone-950/60 text-stone-400">
+                  <tr>
+                    <th className="px-6 py-4 font-medium">User</th>
+                    <th className="px-6 py-4 font-medium">Email Address</th>
+                    <th className="px-6 py-4 font-medium">Date Joined</th>
+                    <th className="px-6 py-4 font-medium">Last Sign In</th>
+                    <th className="px-6 py-4 font-medium">Current Role</th>
+                    <th className="px-6 py-4 font-medium">Manage Role</th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-stone-800">
+                  {filteredDirectoryUsers.map((user) => (
+                    <tr key={user.id} className="hover:bg-stone-800/30">
+                      <td className="px-6 py-4 font-medium text-stone-200">
+                        {[user.firstName, user.lastName]
+                          .filter(Boolean)
+                          .join(" ") || "Unnamed User"}
+                      </td>
+                      <td className="px-6 py-4 text-stone-400">
+                        {user.emailAddress || "No email address"}
+                      </td>
+                      <td className="px-6 py-4 text-stone-400">
+                        {formatDate(user.createdAt)}
+                      </td>
+                      <td className="px-6 py-4 text-stone-400">
+                        {user.lastSignInAt
+                          ? formatDate(user.lastSignInAt)
+                          : "Never"}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span
+                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                            user.role === "admin"
+                              ? "bg-amber-500/10 text-amber-400"
+                              : user.role === "listener"
+                                ? "bg-emerald-500/10 text-emerald-400"
+                                : "bg-stone-700/60 text-stone-300"
+                          }`}
+                        >
+                          {user.role === "admin"
+                            ? "Administrator"
+                            : user.role === "listener"
+                              ? "Listener"
+                              : "User"}
+                        </span>
+                        {user.role === "listener" && user.listenerStatus && (
+                          <span className="block mt-1 text-xs text-stone-500">
+                            {user.listenerStatus}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <select
+                          value={user.role}
+                          disabled={processingId === user.id}
+                          onChange={(event) =>
+                            void updateDirectoryRole(
+                              user,
+                              event.target.value as DirectoryUser["role"]
+                            )
+                          }
+                          className="rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-xs text-stone-200 outline-none focus:border-amber-500 disabled:opacity-50"
+                        >
+                          <option value="user">User</option>
+                          <option value="listener">Listener</option>
+                          <option value="admin">Administrator</option>
+                        </select>
+                        {processingId === user.id && (
+                          <Loader2 className="inline-block ml-2 w-4 h-4 animate-spin text-amber-400" />
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
 
         <section className="rounded-2xl border border-stone-800 bg-stone-900/60 overflow-hidden mb-10">
